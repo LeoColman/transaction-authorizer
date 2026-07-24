@@ -1,0 +1,117 @@
+services:
+  localstack:
+    image: localstack/localstack:3.7.2
+    hostname: localstack
+    container_name: localstack
+    environment:
+      - AWS_DEFAULT_REGION=sa-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - SERVICES=sqs
+      - SKIP_SSL_CERT_DOWNLOAD=1
+      - DISABLE_EVENTS=1
+    ports:
+      - "127.0.0.1:4566:4566"
+      - "127.0.0.1:4510-4559:4510-4559"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:4566/_localstack/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  message-generator:
+    image: golang:1.24.3
+    container_name: message-generator
+    depends_on:
+      localstack:
+        condition: service_healthy
+        restart: true
+    environment:
+      # SQS settings
+      - QUEUE_NAME=conta-bancaria-criada
+      - LOCALSTACK_ENDPOINT=http://localstack:4566
+
+      # Generator settings
+      - TOTAL_ACCOUNTS=100000
+      
+      # Go settings
+      - GOPROXY=https://proxy.golang.org
+      - GOSUMDB=sum.golang.org
+    command: >
+      /bin/sh -c "
+        openssl s_client -showcerts -connect proxy.golang.org:443 </dev/null 2>/dev/null |
+          awk '/-----BEGIN CERTIFICATE-----/,/-----END CERTIFICATE-----/ { print \$0 }' > /usr/local/share/ca-certificates/ca_bundle.crt &&
+        update-ca-certificates &&
+        rm -rf /tmp/go && mkdir -p /tmp/go && cd /tmp/go &&
+        echo "cGFja2FnZSBtYWluCgppbXBvcnQgKAoJImNvbnRleHQiCgkiZm10IgoJImxvZyIKCSJtYXRoL3JhbmQiCgkibmV0L3VybCIKCSJ0aW1lIgoKCSJvcyIKCSJzdHJjb252IgoKCSJnaXRodWIuY29tL2F3cy9hd3Mtc2RrLWdvLXYyL2F3cyIKCSJnaXRodWIuY29tL2F3cy9hd3Mtc2RrLWdvLXYyL2NvbmZpZyIKCSJnaXRodWIuY29tL2F3cy9hd3Mtc2RrLWdvLXYyL2NyZWRlbnRpYWxzIgoJImdpdGh1Yi5jb20vYXdzL2F3cy1zZGstZ28tdjIvc2VydmljZS9zcXMiCgkiZ2l0aHViLmNvbS9hd3MvYXdzLXNkay1nby12Mi9zZXJ2aWNlL3Nxcy90eXBlcyIKCSJnaXRodWIuY29tL2F3cy9zbWl0aHktZ28iCglzbWl0aHllbmRwb2ludHMgImdpdGh1Yi5jb20vYXdzL3NtaXRoeS1nby9lbmRwb2ludHMiCgkiZ2l0aHViLmNvbS9nb29nbGUvdXVpZCIKKQoKLy8gLS0tIEFDQ09VTlQgUEFSQU1FVEVSUyAtLS0KdmFyICgKCWFjY291bnRDb3VudCA9IGdldEVudkludCgiVE9UQUxfQUNDT1VOVFMiLCAxMDAwKQopCgovLyAtLS0gQVdTIFBBUkFNRVRFUlMgLS0tCmNvbnN0ICgKCWF3c1JlZ2lvbiAgICAgICA9ICJzYS1lYXN0LTEiCglhd3NBY2Nlc3NLZXkgICAgPSAidGVzdCIKCWF3c1NlY3JldEtleSAgICA9ICJ0ZXN0IgoJYXdzU2Vzc2lvblRva2VuID0gInRlc3QiCikKCi8vIC0tLSBTUVMgUEFSQU1FVEVSUyAtLS0KdmFyICgKCXF1ZXVlTmFtZSAgICAgICAgICA9IGdldEVudlN0cigiUVVFVUVfTkFNRSIsICJjb250YS1iYW5jYXJpYS1jcmlhZGEiKQoJbG9jYWxzdGFja0VuZHBvaW50ID0gZ2V0RW52U3RyKCJMT0NBTFNUQUNLX0VORFBPSU5UIiwgImh0dHA6Ly9sb2NhbGhvc3Q6NDU2NiIpCgliYXRjaFNpemUgICAgICAgICAgPSAxMAoJY29udGVudFR5cGVLZXkgICAgID0gIkNvbnRlbnRUeXBlIgoJY29udGVudFR5cGVWYWwgICAgID0gImFwcGxpY2F0aW9uL2pzb24iCikKCmZ1bmMgZ2V0RW52U3RyKGtleSwgZmFsbGJhY2sgc3RyaW5nKSBzdHJpbmcgewoJaWYgdiA6PSBvcy5HZXRlbnYoa2V5KTsgdiAhPSAiIiB7CgkJcmV0dXJuIHYKCX0KCXJldHVybiBmYWxsYmFjawp9CgpmdW5jIGdldEVudkludChrZXkgc3RyaW5nLCBmYWxsYmFjayBpbnQpIGludCB7CglpZiB2IDo9IG9zLkdldGVudihrZXkpOyB2ICE9ICIiIHsKCQlpZiBpLCBlcnIgOj0gc3RyY29udi5BdG9pKHYpOyBlcnIgPT0gbmlsIHsKCQkJcmV0dXJuIGkKCQl9Cgl9CglyZXR1cm4gZmFsbGJhY2sKfQoKZnVuYyBzZXR1cFNRUyhjdHggY29udGV4dC5Db250ZXh0KSAoKnNxcy5DbGllbnQsIHN0cmluZykgewoJY2ZnLCBlcnIgOj0gY29uZmlnLkxvYWREZWZhdWx0Q29uZmlnKGN0eCwKCQljb25maWcuV2l0aFJlZ2lvbihhd3NSZWdpb24pLAoJCWNvbmZpZy5XaXRoQ3JlZGVudGlhbHNQcm92aWRlcihhd3MuTmV3Q3JlZGVudGlhbHNDYWNoZSgKCQkJY3JlZGVudGlhbHMuTmV3U3RhdGljQ3JlZGVudGlhbHNQcm92aWRlcihhd3NBY2Nlc3NLZXksIGF3c1NlY3JldEtleSwgYXdzU2Vzc2lvblRva2VuKSkpLAoJKQoJaWYgZXJyICE9IG5pbCB7CgkJbG9nLkZhdGFsZigiW0VSUk9SXSBGYWlsZWQgdG8gbG9hZCBBV1MgY29uZmlnOiAldiIsIGVycikKCX0KCglzcXNDbGllbnQgOj0gc3FzLk5ld0Zyb21Db25maWcoY2ZnLCBmdW5jKG8gKnNxcy5PcHRpb25zKSB7CgkJby5FbmRwb2ludFJlc29sdmVyVjIgPSAmY3VzdG9tU1FTRW5kcG9pbnRSZXNvbHZlcnt9Cgl9KQoKCWdldFF1ZXVlVXJsT3V0LCBlcnIgOj0gc3FzQ2xpZW50LkdldFF1ZXVlVXJsKGN0eCwgJnNxcy5HZXRRdWV1ZVVybElucHV0ewoJCVF1ZXVlTmFtZTogYXdzLlN0cmluZyhxdWV1ZU5hbWUpLAoJfSkKCWlmIGVyciA9PSBuaWwgewoJCXJldHVybiBzcXNDbGllbnQsICpnZXRRdWV1ZVVybE91dC5RdWV1ZVVybAoJfQoKCWxvZy5QcmludGYoIltXQVJOXSBRdWV1ZSBub3QgZm91bmQsIGNyZWF0aW5nOiAlcyIsIHF1ZXVlTmFtZSkKCWNyZWF0ZU91dCwgY3JlYXRlRXJyIDo9IHNxc0NsaWVudC5DcmVhdGVRdWV1ZShjdHgsICZzcXMuQ3JlYXRlUXVldWVJbnB1dHsKCQlRdWV1ZU5hbWU6IGF3cy5TdHJpbmcocXVldWVOYW1lKSwKCX0pCglpZiBjcmVhdGVFcnIgIT0gbmlsIHsKCQlsb2cuRmF0YWxmKCJbRVJST1JdIEZhaWxlZCB0byBjcmVhdGUgU1FTIHF1ZXVlOiAldiIsIGNyZWF0ZUVycikKCX0KCXJldHVybiBzcXNDbGllbnQsICpjcmVhdGVPdXQuUXVldWVVcmwKfQoKdHlwZSBBY2NvdW50SW5mbyBzdHJ1Y3QgewoJSUQgICAgICAgIHN0cmluZwoJT3duZXJJRCAgIHN0cmluZwoJQ3JlYXRlZEF0IGludDY0CglTdGF0dXMgICAgc3RyaW5nCn0KCmZ1bmMgZ2VuZXJhdGVBY2NvdW50cygpIChbXUFjY291bnRJbmZvLCBtYXBbc3RyaW5nXWZsb2F0NjQpIHsKCW5vdyA6PSB0aW1lLk5vdygpLlVuaXgoKQoJZml2ZVllYXJzQWdvIDo9IG5vdyAtIDUqMzY1KjI0KjYwKjYwCglhY2NvdW50cyA6PSBtYWtlKFtdQWNjb3VudEluZm8sIGFjY291bnRDb3VudCkKCWJhbGFuY2VzIDo9IG1ha2UobWFwW3N0cmluZ11mbG9hdDY0LCBhY2NvdW50Q291bnQpCglmb3IgaSA6PSByYW5nZSBhY2NvdW50cyB7CgkJaWQgOj0gdXVpZC5OZXcoKS5TdHJpbmcoKQoJCWFjY291bnRzW2ldID0gQWNjb3VudEluZm97CgkJCUlEOiAgICAgICAgaWQsCgkJCU93bmVySUQ6ICAgdXVpZC5OZXcoKS5TdHJpbmcoKSwKCQkJQ3JlYXRlZEF0OiByYW5kLkludDYzbihub3ctZml2ZVllYXJzQWdvKzEpICsgZml2ZVllYXJzQWdvLAoJCQlTdGF0dXM6ICAgICJFTkFCTEVEIiwKCQl9CgkJYmFsYW5jZXNbaWRdID0gMAoJfQoJcmV0dXJuIGFjY291bnRzLCBiYWxhbmNlcwp9CgovLyBJbnN0ZWFkIG9mIHRyYW5zYWN0aW9ucywgd2Ugbm93IGp1c3Qgc2VuZCBhY2NvdW50IG9iamVjdHMKZnVuYyBnZW5lcmF0ZUFjY291bnRNZXNzYWdlcyhhY2NvdW50cyBbXUFjY291bnRJbmZvKSBbXUFjY291bnRJbmZvIHsKCXJldHVybiBhY2NvdW50cwp9CgpmdW5jIHNlbmRBbGxBY2NvdW50QmF0Y2hlcyhjdHggY29udGV4dC5Db250ZXh0LCBzcXNDbGllbnQgKnNxcy5DbGllbnQsIHF1ZXVlVXJsIHN0cmluZywgYWNjb3VudHMgW11BY2NvdW50SW5mbykgaW50IHsKCXNlbnQgOj0gMAoJZm9yIGkgOj0gMDsgaSA8IGxlbihhY2NvdW50cyk7IGkgKz0gYmF0Y2hTaXplIHsKCQllbmQgOj0gbWluKGkrYmF0Y2hTaXplLCBsZW4oYWNjb3VudHMpKQoJCWJhdGNoIDo9IGFjY291bnRzW2k6ZW5kXQoJCWlmIGVyciA6PSBzZW5kQWNjb3VudEJhdGNoKGN0eCwgc3FzQ2xpZW50LCBxdWV1ZVVybCwgYmF0Y2gpOyBlcnIgIT0gbmlsIHsKCQkJbG9nLkZhdGFsZigiW0VSUk9SXSBGYWlsZWQgdG8gc2VuZCBhY2NvdW50IGJhdGNoIHRvIFNRUzogJXYiLCBlcnIpCgkJfQoJCXNlbnQgKz0gbGVuKGJhdGNoKQoJfQoJcmV0dXJuIHNlbnQKfQoKZnVuYyBwcmludFF1ZXVlU3RhdHMoY3R4IGNvbnRleHQuQ29udGV4dCwgc3FzQ2xpZW50ICpzcXMuQ2xpZW50LCBxdWV1ZVVybCBzdHJpbmcpIHsKCWF0dHJzT3V0LCBlcnIgOj0gc3FzQ2xpZW50LkdldFF1ZXVlQXR0cmlidXRlcyhjdHgsICZzcXMuR2V0UXVldWVBdHRyaWJ1dGVzSW5wdXR7CgkJUXVldWVVcmw6ICAgICAgIGF3cy5TdHJpbmcocXVldWVVcmwpLAoJCUF0dHJpYnV0ZU5hbWVzOiBbXXR5cGVzLlF1ZXVlQXR0cmlidXRlTmFtZXsiQWxsIn0sCgl9KQoJaWYgZXJyICE9IG5pbCB7CgkJbG9nLlByaW50ZigiW1dBUk5dIENvdWxkIG5vdCBnZXQgcXVldWUgYXR0cmlidXRlczogJXYiLCBlcnIpCgkJcmV0dXJuCgl9Cglsb2cuUHJpbnRmKCJbU1FTIFN0YXRzXSBBdHRyaWJ1dGVzIGZvciBxdWV1ZSAnJXMnOiIsIHF1ZXVlTmFtZSkKCWZvciBrLCB2IDo9IHJhbmdlIGF0dHJzT3V0LkF0dHJpYnV0ZXMgewoJCWxvZy5QcmludGYoIiAgJXM6ICVzIiwgaywgdikKCX0KfQoKZnVuYyBzZW5kQWNjb3VudEJhdGNoKGN0eCBjb250ZXh0LkNvbnRleHQsIGNsaWVudCAqc3FzLkNsaWVudCwgcXVldWVVcmwgc3RyaW5nLCBhY2NvdW50cyBbXUFjY291bnRJbmZvKSBlcnJvciB7CgllbnRyaWVzIDo9IG1ha2UoW110eXBlcy5TZW5kTWVzc2FnZUJhdGNoUmVxdWVzdEVudHJ5LCBsZW4oYWNjb3VudHMpKQoJZm9yIGksIGFjYyA6PSByYW5nZSBhY2NvdW50cyB7CgkJYm9keSA6PSBmbXQuU3ByaW50ZigKCQkJYHsiYWNjb3VudCI6eyJpZCI6IiVzIiwib3duZXIiOiIlcyIsImNyZWF0ZWRfYXQiOiIlZCIsInN0YXR1cyI6IiVzIn19YCwKCQkJYWNjLklELCBhY2MuT3duZXJJRCwgYWNjLkNyZWF0ZWRBdCwgYWNjLlN0YXR1cywKCQkpCgkJZW50cmllc1tpXSA9IHR5cGVzLlNlbmRNZXNzYWdlQmF0Y2hSZXF1ZXN0RW50cnl7CgkJCUlkOiAgICAgICAgICBhd3MuU3RyaW5nKGZtdC5TcHJpbnRmKCJtc2ctJWQiLCBpKSksCgkJCU1lc3NhZ2VCb2R5OiBhd3MuU3RyaW5nKGJvZHkpLAoJCQlNZXNzYWdlQXR0cmlidXRlczogbWFwW3N0cmluZ110eXBlcy5NZXNzYWdlQXR0cmlidXRlVmFsdWV7CgkJCQljb250ZW50VHlwZUtleTogewoJCQkJCURhdGFUeXBlOiAgICBhd3MuU3RyaW5nKCJTdHJpbmciKSwKCQkJCQlTdHJpbmdWYWx1ZTogYXdzLlN0cmluZyhjb250ZW50VHlwZVZhbCksCgkJCQl9LAoJCQl9LAoJCX0KCX0KCV8sIGVyciA6PSBjbGllbnQuU2VuZE1lc3NhZ2VCYXRjaChjdHgsICZzcXMuU2VuZE1lc3NhZ2VCYXRjaElucHV0ewoJCVF1ZXVlVXJsOiBhd3MuU3RyaW5nKHF1ZXVlVXJsKSwKCQlFbnRyaWVzOiAgZW50cmllcywKCX0pCglyZXR1cm4gZXJyCn0KCnR5cGUgY3VzdG9tU1FTRW5kcG9pbnRSZXNvbHZlciBzdHJ1Y3R7fQoKZnVuYyAociAqY3VzdG9tU1FTRW5kcG9pbnRSZXNvbHZlcikgUmVzb2x2ZUVuZHBvaW50KGN0eCBjb250ZXh0LkNvbnRleHQsIHBhcmFtcyBzcXMuRW5kcG9pbnRQYXJhbWV0ZXJzKSAoc21pdGh5ZW5kcG9pbnRzLkVuZHBvaW50LCBlcnJvcikgewoJdSwgZXJyIDo9IHVybC5QYXJzZShsb2NhbHN0YWNrRW5kcG9pbnQpCglpZiBlcnIgIT0gbmlsIHsKCQlyZXR1cm4gc21pdGh5ZW5kcG9pbnRzLkVuZHBvaW50e30sIGVycgoJfQoJdmFyIHByb3BzIHNtaXRoeS5Qcm9wZXJ0aWVzCglwcm9wcy5TZXQoImF1dGhTaWduaW5nUmVnaW9uIiwgYXdzUmVnaW9uKQoJcmV0dXJuIHNtaXRoeWVuZHBvaW50cy5FbmRwb2ludHsKCQlVUkk6ICAgICAgICAqdSwKCQlQcm9wZXJ0aWVzOiBwcm9wcywKCX0sIG5pbAp9CgpmdW5jIG1haW4oKSB7CglzdGFydCA6PSB0aW1lLk5vdygpCgljdHggOj0gY29udGV4dC5CYWNrZ3JvdW5kKCkKCglzcXNDbGllbnQsIHF1ZXVlVXJsIDo9IHNldHVwU1FTKGN0eCkKCglhY2NvdW50cywgXyA6PSBnZW5lcmF0ZUFjY291bnRzKCkKCWFjY291bnRNc2dzIDo9IGdlbmVyYXRlQWNjb3VudE1lc3NhZ2VzKGFjY291bnRzKQoKCWxvZy5QcmludGYoIltJTkZPXSBTZW5kaW5nICVkIGFjY291bnQgbWVzc2FnZXMgdG8gU1FTIHF1ZXVlICclcyciLCBsZW4oYWNjb3VudE1zZ3MpLCBxdWV1ZU5hbWUpCglzZW50IDo9IHNlbmRBbGxBY2NvdW50QmF0Y2hlcyhjdHgsIHNxc0NsaWVudCwgcXVldWVVcmwsIGFjY291bnRNc2dzKQoKCWxvZy5QcmludGYoIltJTkZPXSBEb25lLiBTZW50ICVkIGFjY291bnQgbWVzc2FnZXMgdG8gU1FTIHF1ZXVlICclcyciLCBzZW50LCBxdWV1ZU5hbWUpCglsb2cuUHJpbnRmKCJbSU5GT10gVG90YWwgZXhlY3V0aW9uIHRpbWU6ICVkIG1zIiwgdGltZS5TaW5jZShzdGFydCkuTWlsbGlzZWNvbmRzKCkpCgoJcHJpbnRRdWV1ZVN0YXRzKGN0eCwgc3FzQ2xpZW50LCBxdWV1ZVVybCkKfQo=" | base64 -d > message-generator.go &&
+        go clean -modcache &&
+        go mod init message-generator &&
+        go mod tidy &&
+        go mod download &&
+        go run message-generator.go
+      "
+    working_dir: /home
+
+  # ---------------------------------------------------------------------------
+  # Serviços adicionados ao docker-compose fornecido pelo desafio
+  # ---------------------------------------------------------------------------
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: authorizer-postgres
+    environment:
+      - POSTGRES_DB=authorizer
+      - POSTGRES_USER=authorizer
+      - POSTGRES_PASSWORD=authorizer
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U authorizer -d authorizer" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  app:
+    build: .
+    container_name: transaction-authorizer
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    environment:
+      - DB_URL=jdbc:postgresql://postgres:5432/authorizer
+      - DB_USERNAME=authorizer
+      - DB_PASSWORD=authorizer
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_REGION=sa-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - SPRING_PROFILES_ACTIVE=json
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # Observabilidade opcional: docker compose --profile observability up
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    container_name: authorizer-prometheus
+    profiles: [ "observability" ]
+    depends_on:
+      - app
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "127.0.0.1:9090:9090"
+
+volumes:
+  postgres-data:
+
