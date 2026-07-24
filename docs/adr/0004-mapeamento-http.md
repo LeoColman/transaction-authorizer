@@ -26,6 +26,11 @@ do cliente nem do servidor, e o cliente precisa distinguir recusa de falha.
 - Recusa usa **422 com o envelope completo** (não Problem Details): o resultado é
   distinguível tanto pelo status HTTP (clientes/gateways não retentam 4xx) quanto pelo
   campo `status` (clientes que só olham o corpo).
+- **Validação estrutural precede o conflito de idempotência**: retentativa com o mesmo
+  `transactionId` cujo payload divergente é também estruturalmente inválido (moeda
+  desconhecida, tipo inexistente, valor fora do formato) responde o erro de validação
+  (400/422), não 409. O 409 sinaliza payload válido que diverge do original; payload
+  inválido nem chega a ser comparável.
 - Retentativas idempotentes devolvem o mesmo status e corpo originais, com header
   `X-Idempotent-Replay: true`.
 - Conta inexistente é 404 (e não 422): o recurso referenciado não existe e o envelope

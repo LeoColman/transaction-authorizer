@@ -23,6 +23,11 @@ travar em mensagem venenosa.
   mensagem venenosa não registra conta nenhuma; descartar com rastro é o menor dano.
 - **Idempotência no destino**: redelivery e duplicatas são inofensivos porque o insert
   ignora contas existentes, nunca sobrescrevendo saldo.
+- **Fila inexistente derruba o startup (`queueNotFoundStrategy: FAIL`)**: o default da
+  lib (CREATE) criaria silenciosamente uma fila vazia diante de um nome errado em
+  produção, e o consumidor ficaria ouvindo o lugar errado para sempre com health check
+  verde. Fail-fast transforma erro de configuração em falha visível de deploy. O perfil
+  `local` mantém CREATE por conveniência com LocalStack.
 
 ## Em produção (não implementado aqui)
 

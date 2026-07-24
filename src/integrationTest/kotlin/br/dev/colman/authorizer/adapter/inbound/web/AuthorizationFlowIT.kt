@@ -16,6 +16,7 @@ import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.client.RestClient
 import java.math.BigDecimal
+import java.net.URI
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.Executors
@@ -163,6 +164,18 @@ class AuthorizationFlowIT(
 
         test("transactionId que não é UUID responde 400") {
             post("nao-e-uuid", body(UUID.randomUUID(), "CREDIT", "10.00")).statusCode shouldBe HttpStatus.BAD_REQUEST
+        }
+
+        test("transactionId em branco no path responde 400 no formato de erro da aplicação") {
+            val response = client.post()
+                .uri(URI.create("http://localhost:$port/transactions/%20"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body(UUID.randomUUID(), "CREDIT", "10.00"))
+                .retrieve()
+                .toEntity(String::class.java)
+
+            response.statusCode shouldBe HttpStatus.BAD_REQUEST
+            response.body!! shouldContain "invalid-request"
         }
 
         test("mesmo transactionId com payload divergente responde 409 e não altera saldo") {

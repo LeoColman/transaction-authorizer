@@ -12,6 +12,7 @@ import org.springframework.http.ProblemDetail
 import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.web.bind.MethodArgumentNotValidException
+import org.springframework.web.bind.MissingPathVariableException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.context.request.WebRequest
@@ -69,6 +70,20 @@ class ApiExceptionHandler : ResponseEntityExceptionHandler() {
         status: HttpStatusCode,
         request: WebRequest,
     ): ResponseEntity<Any>? = badRequest("Corpo da requisição malformado ou com valores inválidos")
+
+    override fun handleMissingPathVariable(
+        e: MissingPathVariableException,
+        headers: HttpHeaders,
+        status: HttpStatusCode,
+        request: WebRequest,
+    ): ResponseEntity<Any>? = if (e.isMissingAfterConversion) {
+        // Path variable presente mas convertida para null (ex.: segmento em
+        // branco): mesmo formato de erro dos demais parâmetros inválidos.
+        ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(problem(HttpStatus.BAD_REQUEST, "invalid-request", "Parâmetro inválido", "${e.variableName} não é um valor válido"))
+    } else {
+        super.handleMissingPathVariable(e, headers, status, request)
+    }
 
     @ExceptionHandler(Exception::class)
     fun unexpected(e: Exception): ProblemDetail {

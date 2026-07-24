@@ -64,3 +64,9 @@ spring:
       credentials:
         access-key: ${AWS_ACCESS_KEY_ID:test}
         secret-key: ${AWS_SECRET_ACCESS_KEY:test}
+
+authorizer:
+  sqs:
+    # LocalStack: criar a fila se ainda não existir é conveniência de dev.
+    # Fora deste perfil o padrão é FAIL (fila errada = startup falha, ADR-0005).
+    queue-not-found-strategy: CREATE

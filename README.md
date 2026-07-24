@@ -287,3 +287,8 @@ expand/contract (nunca quebrar a versão N-1, que continua rodando durante o shi
   dos clientes (dias, não anos).
 - **Testes de caos** (falha de banco no meio da autorização) e **testes de contrato**
   (Pact) para os consumidores da API.
+- **Teto de saldo explícito**: `NUMERIC(19,2)` comporta saldo até ~10^17. Um crédito
+  válido que estourasse esse teto hoje responderia 500 (e, como nada é gravado, o retry
+  repetiria o erro). Cenário exige saldo de centenas de quatrilhões de reais, mas a
+  versão de produção teria teto de saldo por conta com recusa de negócio explícita em
+  vez de erro genérico.

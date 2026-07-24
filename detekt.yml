@@ -11,6 +11,12 @@ style:
     # ou valores monetários de teste; extrair constantes só afastaria o contexto.
     active: false
 
+complexity:
+  TooManyFunctions:
+    # ApiExceptionHandler é um catálogo plano de handlers de exceção: uma função
+    # curta por tipo de erro. Dividir a classe só espalharia o mapeamento HTTP.
+    thresholdInClasses: 16
+
 performance:
   SpreadOperator:
     # Bootstrap usa runApplication<...>(*args) (padrão Spring Boot) e o cenário
