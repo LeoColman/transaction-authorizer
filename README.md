@@ -72,6 +72,7 @@ começa a consumir a fila imediatamente.
 - Health: `http://localhost:8080/actuator/health`
 - Métricas Prometheus: `http://localhost:8080/actuator/prometheus`
 - Prometheus opcional: `docker compose --profile observability up` (`http://localhost:9090`)
+- PostgreSQL exposto em `localhost:5433` (evita conflito com Postgres local em 5432)
 
 Coleção de requisições em [`requests/transactions.http`](requests/transactions.http).
 
@@ -132,6 +133,13 @@ Racional do mapeamento em [ADR-0004](docs/adr/0004-mapeamento-http.md).
 - **Carga**: mix 2/3 débito e 1/3 crédito com seed pelo mesmo caminho de produção (fila).
   Assertions: falhas < 1%, p99 < 800 ms, média < 200 ms. Knobs: `LOAD_RATE`,
   `LOAD_DURATION_SECONDS`, `LOAD_ACCOUNTS`.
+
+  Resultado de referência (notebook local, stack completa no docker compose):
+  **42.672 requisições, 0 falhas, ~569 req/s, média 1 ms, p99 2 ms**. Após a carga,
+  verificação de consistência no banco: para todas as contas,
+  `saldo = SUM(créditos aprovados) - SUM(débitos aprovados)`, com **zero divergências
+  e zero saldos negativos** em 42.678 transações gravadas. A fila com 100.000 contas
+  do desafio (200.000 no teste, gerador executado duas vezes) foi drenada integralmente.
 
 ## Decisões de arquitetura (ADRs)
 
