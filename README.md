@@ -3,7 +3,7 @@
 ![Cobertura total](https://img.shields.io/badge/cobertura%20total-98.4%25-brightgreen)
 ![Cobertura unitários](https://img.shields.io/badge/testes%20unit%C3%A1rios-61.4%25-yellow)
 ![Cobertura integração](https://img.shields.io/badge/testes%20de%20integra%C3%A7%C3%A3o-94.9%25-brightgreen)
-![Fumaça](https://img.shields.io/badge/fuma%C3%A7a-7%2F7%20cen%C3%A1rios-brightgreen)
+![Fumaça](https://img.shields.io/badge/fuma%C3%A7a-15%2F15%20cen%C3%A1rios-brightgreen)
 ![Mutantes mortos](https://img.shields.io/badge/mutantes%20mortos-96.9%25-brightgreen)
 
 ![CI](https://github.com/LeoColman/transaction-authorizer/actions/workflows/ci.yml/badge.svg)

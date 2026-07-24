@@ -1,8 +1,11 @@
 package br.dev.colman.authorizer.smoke
 
+import com.jayway.jsonpath.JsonPath
 import io.kotest.core.spec.style.FunSpec
+import io.kotest.matchers.doubles.plusOrMinus
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldMatch
 import org.awaitility.kotlin.await
 import org.awaitility.kotlin.untilAsserted
 import org.springframework.http.HttpStatus
@@ -41,8 +44,8 @@ class SmokeTest : FunSpec({
         .retrieve()
         .toEntity(String::class.java)
 
-    fun body(accountId: UUID, type: String, value: String) =
-        """{"accountId":"$accountId","type":"$type","amount":{"value":$value,"currency":"BRL"}}"""
+    fun body(accountId: UUID, type: String, value: String, currency: String = "BRL") =
+        """{"accountId":"$accountId","type":"$type","amount":{"value":$value,"currency":"$currency"}}"""
 
     val accountId = UUID.randomUUID()
 
@@ -95,6 +98,79 @@ class SmokeTest : FunSpec({
         first.statusCode shouldBe HttpStatus.OK
         replay.body shouldBe first.body
         replay.headers.getFirst("X-Idempotent-Replay") shouldBe "true"
+    }
+
+    test("resposta segue o envelope do desafio com timestamp ISO 8601 com offset") {
+        val transactionId = UUID.randomUUID()
+        val response = post(transactionId, body(accountId, "CREDIT", "3.33"))
+
+        response.statusCode shouldBe HttpStatus.OK
+        val json = response.body!!
+        JsonPath.read<String>(json, "$.transaction.id") shouldBe transactionId.toString()
+        JsonPath.read<String>(json, "$.transaction.type") shouldBe "CREDIT"
+        JsonPath.read<Double>(json, "$.transaction.amount.value") shouldBe (3.33 plusOrMinus 0.001)
+        JsonPath.read<String>(json, "$.transaction.amount.currency") shouldBe "BRL"
+        JsonPath.read<String>(json, "$.transaction.status") shouldBe "SUCCEEDED"
+        JsonPath.read<String>(json, "$.transaction.timestamp") shouldMatch
+            """\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?[+-]\d{2}:\d{2}"""
+        JsonPath.read<String>(json, "$.account.id") shouldBe accountId.toString()
+        JsonPath.read<String>(json, "$.account.balance.currency") shouldBe "BRL"
+    }
+
+    test("saldo retornado reflete exatamente créditos e débitos aplicados") {
+        val afterCredit = post(UUID.randomUUID(), body(accountId, "CREDIT", "7.00")).body!!
+        val balanceAfterCredit = JsonPath.read<Double>(afterCredit, "$.account.balance.amount")
+
+        val afterDebit = post(UUID.randomUUID(), body(accountId, "DEBIT", "2.50")).body!!
+        val balanceAfterDebit = JsonPath.read<Double>(afterDebit, "$.account.balance.amount")
+
+        balanceAfterDebit shouldBe ((balanceAfterCredit - 2.50) plusOrMinus 0.001)
+    }
+
+    test("mesmo transactionId com payload divergente responde 409 conflito de idempotência") {
+        val transactionId = UUID.randomUUID()
+        post(transactionId, body(accountId, "CREDIT", "2.00")).statusCode shouldBe HttpStatus.OK
+
+        val conflict = post(transactionId, body(accountId, "DEBIT", "999.99"))
+
+        conflict.statusCode shouldBe HttpStatus.CONFLICT
+        conflict.body!! shouldContain "idempotency-conflict"
+    }
+
+    test("conta inexistente responde 404 problem detail") {
+        val response = post(UUID.randomUUID(), body(UUID.randomUUID(), "CREDIT", "10.00"))
+        response.statusCode shouldBe HttpStatus.NOT_FOUND
+        response.body!! shouldContain "account-not-found"
+    }
+
+    test("moeda não suportada responde 422 problem detail") {
+        val response = post(UUID.randomUUID(), body(accountId, "CREDIT", "1.00", currency = "USD"))
+        response.statusCode shouldBe HttpStatus.UNPROCESSABLE_CONTENT
+        response.body!! shouldContain "unsupported-currency"
+    }
+
+    test("payload inválido responde 400 problem detail") {
+        val response = post(UUID.randomUUID(), body(accountId, "CREDIT", "0"))
+        response.statusCode shouldBe HttpStatus.BAD_REQUEST
+        response.body!! shouldContain "invalid-request"
+    }
+
+    test("erros de protocolo preservam o status HTTP nativo (405, 404, 415)") {
+        client.get().uri("/transactions/${UUID.randomUUID()}").retrieve()
+            .toEntity(String::class.java).statusCode shouldBe HttpStatus.METHOD_NOT_ALLOWED
+
+        client.get().uri("/rota-que-nao-existe").retrieve()
+            .toEntity(String::class.java).statusCode shouldBe HttpStatus.NOT_FOUND
+
+        client.post().uri("/transactions/${UUID.randomUUID()}")
+            .contentType(MediaType.TEXT_PLAIN).body("nao é json").retrieve()
+            .toEntity(String::class.java).statusCode shouldBe HttpStatus.UNSUPPORTED_MEDIA_TYPE
+    }
+
+    test("contrato OpenAPI publicado com o endpoint de autorização") {
+        val docs = client.get().uri("/v3/api-docs").retrieve().toEntity(String::class.java)
+        docs.statusCode shouldBe HttpStatus.OK
+        docs.body!! shouldContain "/transactions/{transactionId}"
     }
 
     test("métricas Prometheus expostas com contadores do autorizador") {
