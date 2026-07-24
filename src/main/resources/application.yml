@@ -1,0 +1,56 @@
+spring:
+  application:
+    name: transaction-authorizer
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/authorizer}
+    username: ${DB_USERNAME:authorizer}
+    password: ${DB_PASSWORD:authorizer}
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:20}
+      minimum-idle: 5
+      connection-timeout: 3000
+      validation-timeout: 2000
+  jackson:
+    default-property-inclusion: non_null
+    generator:
+      write-bigdecimal-as-plain: true
+  cloud:
+    aws:
+      region:
+        static: ${AWS_REGION:sa-east-1}
+      credentials:
+        access-key: ${AWS_ACCESS_KEY_ID:test}
+        secret-key: ${AWS_SECRET_ACCESS_KEY:test}
+      # Endpoint do LocalStack para execução local; em produção a propriedade
+      # AWS_ENDPOINT_URL não é definida e o SDK resolve o endpoint real da AWS.
+      endpoint: ${AWS_ENDPOINT_URL:http://localhost:4566}
+
+authorizer:
+  presentation-timezone: ${PRESENTATION_TIMEZONE:America/Sao_Paulo}
+  sqs:
+    account-created-queue: ${ACCOUNT_CREATED_QUEUE:conta-bancaria-criada}
+    max-concurrent-messages: ${SQS_MAX_CONCURRENT_MESSAGES:100}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+server:
+  shutdown: graceful
