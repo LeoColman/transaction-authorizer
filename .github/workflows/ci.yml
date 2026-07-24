@@ -19,14 +19,16 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       # 'check' roda testes unitários e de integração (Testcontainers usa o
-      # Docker do próprio runner).
-      - name: Build e testes
-        run: ./gradlew build
+      # Docker do próprio runner). koverVerify falha se cobertura total < 80%.
+      - name: Build, testes e gate de cobertura
+        run: ./gradlew build koverVerify koverXmlReport koverHtmlReport
 
-      - name: Publica relatórios de teste
+      - name: Publica relatórios de teste e cobertura
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-reports
-          path: build/reports/tests/
+          name: test-and-coverage-reports
+          path: |
+            build/reports/tests/
+            build/reports/kover/
           retention-days: 7

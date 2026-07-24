@@ -1,5 +1,15 @@
 # Transaction Authorizer
 
+![Cobertura total](https://img.shields.io/badge/cobertura%20total-97.7%25-brightgreen)
+![Cobertura unitários](https://img.shields.io/badge/testes%20unit%C3%A1rios-57.9%25-yellow)
+![Cobertura integração](https://img.shields.io/badge/testes%20de%20integra%C3%A7%C3%A3o-94.7%25-brightgreen)
+![Fumaça](https://img.shields.io/badge/fuma%C3%A7a-7%2F7%20cen%C3%A1rios-brightgreen)
+
+<!-- Após publicar no GitHub, troque OWNER/REPO para ativar os escudos dinâmicos:
+![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)
+![Smoke](https://github.com/OWNER/REPO/actions/workflows/smoke.yml/badge.svg)
+-->
+
 API de autorização de transações financeiras (crédito e débito) com registro de contas
 via fila SQS, construída para alta volumetria com foco em **consistência**, **disponibilidade**
 e **resiliência**.
@@ -140,6 +150,30 @@ Racional do mapeamento em [ADR-0004](docs/adr/0004-mapeamento-http.md).
   `saldo = SUM(créditos aprovados) - SUM(débitos aprovados)`, com **zero divergências
   e zero saldos negativos** em 42.678 transações gravadas. A fila com 100.000 contas
   do desafio (200.000 no teste, gerador executado duas vezes) foi drenada integralmente.
+
+### Cobertura de código (Kover)
+
+| Suíte | Cobertura de linhas | O que exercita |
+|---|---|---|
+| Unitários | 57,9% | Domínio (96%), aplicação (85%+), mapeamento de DTOs (94%) — isolados com MockK |
+| Integração | 94,7% | Tudo acima + adaptadores reais: repositórios Postgres, controller, listener SQS |
+| **Total (unit + integração)** | **97,7%** | Gate de 80% no build (`koverVerify`) |
+
+A leitura correta dos números: na arquitetura hexagonal, adaptadores (SQL, HTTP,
+fila) são deliberadamente testados contra infraestrutura real na camada de
+integração, não com mocks na unitária. Por isso a suíte unitária cobre o núcleo de
+negócio e a de integração completa os adaptadores. Fumaça e carga não medem
+cobertura: a aplicação roda em container separado (JVM externa ao agente).
+
+```bash
+./gradlew koverHtmlReport                          # total (unit + integração)
+./gradlew koverHtmlReport -PkoverMode=unit         # só unitários
+./gradlew koverHtmlReport -PkoverMode=integration  # só integração
+./gradlew koverVerify                              # falha se total < 80%
+```
+
+Relatório em `build/reports/kover/html/index.html`. Excluídos da medição: classe de
+bootstrap e pacote `config` (wiring sem lógica), source sets de teste.
 
 ## Decisões de arquitetura (ADRs)
 

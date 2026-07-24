@@ -4,6 +4,7 @@ plugins {
     id("org.springframework.boot") version "4.0.7"
     id("io.spring.dependency-management") version "1.1.7"
     id("io.gatling.gradle") version "3.15.1.2"
+    id("org.jetbrains.kotlinx.kover") version "0.9.9"
 }
 
 group = "br.dev.colman"
@@ -110,4 +111,39 @@ tasks.check {
 
 springBoot {
     buildInfo()
+}
+
+// Modo de cobertura: -PkoverMode=unit | integration | all (padrão).
+// Permite medir a contribuição de cada camada da pirâmide separadamente.
+val koverMode = providers.gradleProperty("koverMode").getOrElse("all")
+
+kover {
+    currentProject {
+        sources {
+            // Código de teste não é código coberto: só o source set main conta.
+            excludedSourceSets.addAll("integrationTest", "smokeTest", "gatling")
+        }
+        instrumentation {
+            when (koverMode) {
+                "unit" -> disabledForTestTasks.addAll("integrationTest", "smokeTest")
+                "integration" -> disabledForTestTasks.addAll("test", "smokeTest")
+                else -> disabledForTestTasks.add("smokeTest")
+            }
+        }
+    }
+    reports {
+        filters {
+            excludes {
+                // Bootstrap e wiring de infraestrutura, sem lógica de negócio.
+                classes("br.dev.colman.authorizer.TransactionAuthorizerApplicationKt")
+                classes("br.dev.colman.authorizer.TransactionAuthorizerApplication")
+                packages("br.dev.colman.authorizer.config")
+            }
+        }
+        verify {
+            rule("Cobertura mínima de linhas (unitários + integração)") {
+                minBound(80)
+            }
+        }
+    }
 }
