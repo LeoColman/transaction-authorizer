@@ -15,3 +15,7 @@ class AccountDisabledException(val accountId: UUID) :
 /** Já existe uma autorização registrada para este transactionId. */
 class DuplicateTransactionException(val transactionId: UUID) :
     DomainException("Transação já autorizada: $transactionId")
+
+/** Moeda não suportada pelo autorizador (ADR-0003: somente BRL). */
+class UnsupportedCurrencyException(val currencyCode: String) :
+    DomainException("Moeda não suportada: $currencyCode")

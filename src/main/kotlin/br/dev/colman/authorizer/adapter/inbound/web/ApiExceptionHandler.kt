@@ -1,0 +1,64 @@
+package br.dev.colman.authorizer.adapter.inbound.web
+
+import br.dev.colman.authorizer.domain.AccountDisabledException
+import br.dev.colman.authorizer.domain.AccountNotFoundException
+import br.dev.colman.authorizer.domain.UnsupportedCurrencyException
+import org.slf4j.LoggerFactory
+import org.springframework.http.HttpStatus
+import org.springframework.http.ProblemDetail
+import org.springframework.http.converter.HttpMessageNotReadableException
+import org.springframework.web.bind.MethodArgumentNotValidException
+import org.springframework.web.bind.annotation.ExceptionHandler
+import org.springframework.web.bind.annotation.RestControllerAdvice
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
+import java.net.URI
+
+/**
+ * Erros no formato RFC 9457 (Problem Details). Recusa por saldo insuficiente
+ * NÃO passa por aqui: é resultado de negócio, respondido com o envelope
+ * completo da transação e HTTP 422 (ADR-0004).
+ */
+@RestControllerAdvice
+class ApiExceptionHandler {
+
+    private val log = LoggerFactory.getLogger(javaClass)
+
+    @ExceptionHandler(AccountNotFoundException::class)
+    fun accountNotFound(e: AccountNotFoundException): ProblemDetail =
+        problem(HttpStatus.NOT_FOUND, "account-not-found", "Conta não encontrada", e.message)
+
+    @ExceptionHandler(AccountDisabledException::class)
+    fun accountDisabled(e: AccountDisabledException): ProblemDetail =
+        problem(HttpStatus.UNPROCESSABLE_ENTITY, "account-disabled", "Conta desabilitada", e.message)
+
+    @ExceptionHandler(UnsupportedCurrencyException::class)
+    fun unsupportedCurrency(e: UnsupportedCurrencyException): ProblemDetail =
+        problem(HttpStatus.UNPROCESSABLE_ENTITY, "unsupported-currency", "Moeda não suportada", e.message)
+
+    @ExceptionHandler(MethodArgumentNotValidException::class)
+    fun invalidBody(e: MethodArgumentNotValidException): ProblemDetail {
+        val detail = e.bindingResult.fieldErrors.joinToString("; ") { "${it.field}: ${it.defaultMessage}" }
+        return problem(HttpStatus.BAD_REQUEST, "invalid-request", "Payload inválido", detail)
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException::class)
+    fun unreadableBody(e: HttpMessageNotReadableException): ProblemDetail =
+        problem(HttpStatus.BAD_REQUEST, "invalid-request", "Payload inválido", "Corpo da requisição malformado ou com valores inválidos")
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException::class)
+    fun invalidPathVariable(e: MethodArgumentTypeMismatchException): ProblemDetail =
+        problem(HttpStatus.BAD_REQUEST, "invalid-request", "Parâmetro inválido", "${e.name} não é um valor válido")
+
+    @ExceptionHandler(Exception::class)
+    fun unexpected(e: Exception): ProblemDetail {
+        log.error("Erro inesperado ao processar requisição", e)
+        return problem(HttpStatus.INTERNAL_SERVER_ERROR, "internal-error", "Erro interno", "Erro inesperado; tente novamente")
+    }
+
+    private fun problem(status: HttpStatus, type: String, title: String, detail: String?): ProblemDetail =
+        ProblemDetail.forStatus(status).apply {
+            this.type = URI.create("https://transaction-authorizer/errors/$type")
+            this.title = title
+            this.detail = detail
+        }
+}
