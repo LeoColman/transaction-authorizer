@@ -168,7 +168,10 @@ Racional do mapeamento em [ADR-0004](docs/adr/0004-mapeamento-http.md).
 A leitura correta dos números: na arquitetura hexagonal, adaptadores (SQL, HTTP,
 fila) são deliberadamente testados contra infraestrutura real na camada de
 integração, não com mocks na unitária. Por isso a suíte unitária cobre o núcleo de
-negócio e a de integração completa os adaptadores. Fumaça e carga não medem
+negócio e a de integração completa os adaptadores. Medida apenas contra os pacotes
+que são responsabilidade dela (domínio, aplicação, DTOs e listener — o mesmo escopo
+do Pitest), a suíte unitária cobre **99,4%**; os 61,8% acima incluem os adaptadores
+JDBC e web, que por decisão pertencem à integração. Fumaça e carga não medem
 cobertura: a aplicação roda em container separado (JVM externa ao agente).
 
 ```bash
