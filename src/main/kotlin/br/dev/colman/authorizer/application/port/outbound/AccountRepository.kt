@@ -29,4 +29,9 @@ interface AccountRepository {
      * @return novo saldo, ou null se a conta não existe ou o saldo é insuficiente.
      */
     fun applyDebit(accountId: UUID, amount: BigDecimal): BigDecimal?
+
+    /**
+     * Saldo atual da conta, ou null se a conta não existe.
+     */
+    fun currentBalance(accountId: UUID): BigDecimal?
 }

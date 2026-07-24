@@ -46,8 +46,11 @@ class AuthorizationExecutor(
         val transaction = if (newBalance != null) {
             authorized(command, TransactionStatus.SUCCEEDED, Money(newBalance, command.amount.currency))
         } else {
-            // Débito recusado por saldo insuficiente: saldo permanece o lido acima.
-            authorized(command, TransactionStatus.FAILED, account.balance)
+            // Débito recusado por saldo insuficiente: relê o saldo para responder o
+            // valor mais recente (a leitura inicial pode ter ficado defasada).
+            val balance = accounts.currentBalance(account.id)
+                ?: throw AccountNotFoundException(account.id)
+            authorized(command, TransactionStatus.FAILED, Money(balance, command.amount.currency))
         }
 
         transactions.insert(transaction)
