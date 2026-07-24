@@ -3,7 +3,7 @@ package br.dev.colman.authorizer.adapter.inbound.sqs
 import br.dev.colman.authorizer.application.port.inbound.NewAccount
 import br.dev.colman.authorizer.application.port.inbound.RegisterAccountsUseCase
 import br.dev.colman.authorizer.domain.AccountStatus
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import tools.jackson.module.kotlin.jacksonObjectMapper
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry

@@ -29,11 +29,11 @@ class ApiExceptionHandler {
 
     @ExceptionHandler(AccountDisabledException::class)
     fun accountDisabled(e: AccountDisabledException): ProblemDetail =
-        problem(HttpStatus.UNPROCESSABLE_ENTITY, "account-disabled", "Conta desabilitada", e.message)
+        problem(HttpStatus.UNPROCESSABLE_CONTENT, "account-disabled", "Conta desabilitada", e.message)
 
     @ExceptionHandler(UnsupportedCurrencyException::class)
     fun unsupportedCurrency(e: UnsupportedCurrencyException): ProblemDetail =
-        problem(HttpStatus.UNPROCESSABLE_ENTITY, "unsupported-currency", "Moeda não suportada", e.message)
+        problem(HttpStatus.UNPROCESSABLE_CONTENT, "unsupported-currency", "Moeda não suportada", e.message)
 
     @ExceptionHandler(MethodArgumentNotValidException::class)
     fun invalidBody(e: MethodArgumentNotValidException): ProblemDetail {

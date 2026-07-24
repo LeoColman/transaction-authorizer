@@ -35,7 +35,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-flyway")
     implementation("io.awspring.cloud:spring-cloud-aws-starter-sqs")
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3")
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+    implementation("tools.jackson.module:jackson-module-kotlin")
     implementation("io.micrometer:micrometer-registry-prometheus")
     implementation("net.logstash.logback:logstash-logback-encoder:8.1")
     implementation("org.jetbrains.kotlin:kotlin-reflect")

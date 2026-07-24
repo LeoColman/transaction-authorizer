@@ -12,6 +12,7 @@ import br.dev.colman.authorizer.domain.TransactionType
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 import java.time.Clock
+import java.time.temporal.ChronoUnit
 
 /**
  * Executa uma autorização dentro de uma única transação de banco:
@@ -68,6 +69,8 @@ class AuthorizationExecutor(
         amount = command.amount,
         status = status,
         balanceAfter = balanceAfter,
-        timestamp = clock.instant(),
+        // Trunca em microssegundos: precisão máxima do timestamptz do Postgres.
+        // Garante que o replay idempotente devolva timestamp idêntico ao original.
+        timestamp = clock.instant().truncatedTo(ChronoUnit.MICROS),
     )
 }

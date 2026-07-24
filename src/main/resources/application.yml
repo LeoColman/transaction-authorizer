@@ -15,8 +15,6 @@ spring:
       validation-timeout: 2000
   jackson:
     default-property-inclusion: non_null
-    generator:
-      write-bigdecimal-as-plain: true
   cloud:
     aws:
       region:

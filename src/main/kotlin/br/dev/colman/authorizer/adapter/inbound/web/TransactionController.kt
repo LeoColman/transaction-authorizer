@@ -60,7 +60,7 @@ class TransactionController(
             transaction.id, transaction.accountId, transaction.type, transaction.status, result.replayed,
         )
 
-        val httpStatus = if (transaction.approved) HttpStatus.OK else HttpStatus.UNPROCESSABLE_ENTITY
+        val httpStatus = if (transaction.approved) HttpStatus.OK else HttpStatus.UNPROCESSABLE_CONTENT
         return ResponseEntity.status(httpStatus)
             .header("X-Idempotent-Replay", result.replayed.toString())
             .body(TransactionResponse.from(transaction, presentationZone))

@@ -4,8 +4,8 @@ import br.dev.colman.authorizer.application.port.inbound.NewAccount
 import br.dev.colman.authorizer.application.port.inbound.RegisterAccountsUseCase
 import br.dev.colman.authorizer.domain.AccountStatus
 import com.fasterxml.jackson.annotation.JsonProperty
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.readValue
+import tools.jackson.databind.ObjectMapper
+import tools.jackson.module.kotlin.readValue
 import io.awspring.cloud.sqs.annotation.SqsListener
 import io.micrometer.core.instrument.MeterRegistry
 import org.slf4j.LoggerFactory
