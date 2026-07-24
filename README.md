@@ -4,6 +4,7 @@
 ![Cobertura unitários](https://img.shields.io/badge/testes%20unit%C3%A1rios-57.9%25-yellow)
 ![Cobertura integração](https://img.shields.io/badge/testes%20de%20integra%C3%A7%C3%A3o-94.7%25-brightgreen)
 ![Fumaça](https://img.shields.io/badge/fuma%C3%A7a-7%2F7%20cen%C3%A1rios-brightgreen)
+![Mutantes mortos](https://img.shields.io/badge/mutantes%20mortos-96.6%25-brightgreen)
 
 <!-- Após publicar no GitHub, troque OWNER/REPO para ativar os escudos dinâmicos:
 ![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)
@@ -174,6 +175,28 @@ cobertura: a aplicação roda em container separado (JVM externa ao agente).
 
 Relatório em `build/reports/kover/html/index.html`. Excluídos da medição: classe de
 bootstrap e pacote `config` (wiring sem lógica), source sets de teste.
+
+### Testes de mutação (Pitest)
+
+Cobertura diz que uma linha foi executada; mutação diz se algum teste **falha quando o
+comportamento muda**. O Pitest injeta defeitos artificiais (inverte condições, remove
+chamadas, troca retornos) e verifica se a suíte unitária os detecta.
+
+**Resultado: 56 de 58 mutantes mortos (96,6%), zero mutantes sem cobertura.**
+Gate de 90% no build (`mutationThreshold`).
+
+```bash
+./gradlew pitest   # relatório em build/reports/pitest/index.html
+```
+
+- Alvo: domínio, aplicação e adaptadores com testes unitários. Adaptadores cobertos por
+  integração (SQL/controller) ficam fora: mutantes lá seriam ruído que a suíte unitária
+  não tem como matar.
+- Filtrados da mutação: null-checks sintéticos do compilador Kotlin e chamadas de log
+  (não são comportamento de negócio).
+- Os 2 sobreviventes conhecidos são o guard `requireSameCurrency` de `Money`: com uma
+  única moeda no enum (ADR-0003) é impossível construir o caso que o dispara. O guard
+  fica como proteção para a evolução multi-moeda.
 
 ## Decisões de arquitetura (ADRs)
 

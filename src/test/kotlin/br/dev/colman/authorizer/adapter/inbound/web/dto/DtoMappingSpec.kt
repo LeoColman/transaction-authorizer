@@ -41,7 +41,19 @@ class DtoMappingSpec : FunSpec({
             amount = AmountRequest(BigDecimal("10.00"), "USD"),
         )
 
-        shouldThrow<UnsupportedCurrencyException> { request.toCommand(transactionId) }
+        val exception = shouldThrow<UnsupportedCurrencyException> { request.toCommand(transactionId) }
+        exception.currencyCode shouldBe "USD"
+    }
+
+    test("request expõe os campos recebidos (contrato de deserialização)") {
+        val amount = AmountRequest(BigDecimal("97.07"), "BRL")
+        val request = AuthorizeTransactionRequest(accountId, TransactionType.CREDIT, amount)
+
+        request.accountId shouldBe accountId
+        request.type shouldBe TransactionType.CREDIT
+        request.amount shouldBe amount
+        amount.value shouldBe BigDecimal("97.07")
+        amount.currency shouldBe "BRL"
     }
 
     test("resposta segue o contrato do desafio, com timestamp no fuso de apresentação") {

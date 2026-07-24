@@ -5,6 +5,7 @@ plugins {
     id("io.spring.dependency-management") version "1.1.7"
     id("io.gatling.gradle") version "3.15.1.2"
     id("org.jetbrains.kotlinx.kover") version "0.9.9"
+    id("info.solidsoft.pitest") version "1.19.0"
 }
 
 group = "br.dev.colman"
@@ -53,6 +54,10 @@ dependencies {
     testImplementation("io.kotest:kotest-extensions-spring:$kotestVersion")
     testImplementation("io.mockk:mockk:1.14.11")
     testImplementation("com.ninja-squad:springmockk:5.0.1")
+
+    // Somente no classpath da ferramenta Pitest: no classpath normal de teste a
+    // extensão conflita com o discovery do JUnit Platform.
+    pitest("io.kotest:kotest-extensions-pitest:$kotestVersion")
 }
 
 val integrationTest: SourceSet by sourceSets.creating {
@@ -111,6 +116,33 @@ tasks.check {
 
 springBoot {
     buildInfo()
+}
+
+pitest {
+    pitestVersion = "1.25.8"
+    // O Boot já traz junit-platform-launcher alinhado ao Jupiter; a injeção do
+    // plugin causa "unaligned versions" no discovery do JUnit Platform.
+    addJUnitPlatformLauncher = false
+    // Mutação onde a suíte unitária é a responsável pela correção: domínio,
+    // aplicação e adaptadores com testes unitários. Adaptadores cobertos por
+    // integração (SQL/controller) ficam fora: mutantes lá seriam ruído.
+    targetClasses = setOf(
+        "br.dev.colman.authorizer.domain.*",
+        "br.dev.colman.authorizer.application.*",
+        "br.dev.colman.authorizer.adapter.inbound.sqs.*",
+        "br.dev.colman.authorizer.adapter.inbound.web.dto.*",
+    )
+    targetTests = setOf("br.dev.colman.authorizer.*")
+    threads = Runtime.getRuntime().availableProcessors().coerceAtMost(8)
+    outputFormats = setOf("XML", "HTML")
+    timestampedReports = false
+    exportLineCoverage = true
+    // Null-checks sintéticos do compilador Kotlin e chamadas de log não são
+    // lógica de negócio: mutá-los gera sobreviventes que nenhum teste
+    // comportamental deveria matar.
+    avoidCallsTo = setOf("kotlin.jvm.internal", "org.slf4j")
+    // Gate: score mínimo de mutação (%). Sobreviventes conhecidos documentados no README.
+    mutationThreshold = 90
 }
 
 // Modo de cobertura: -PkoverMode=unit | integration | all (padrão).
