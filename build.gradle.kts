@@ -75,6 +75,7 @@ dependencies {
     "integrationTestImplementation"("org.testcontainers:testcontainers-postgresql")
     "integrationTestImplementation"("org.testcontainers:testcontainers-localstack")
     "integrationTestImplementation"("org.awaitility:awaitility-kotlin")
+    "smokeTestImplementation"("org.awaitility:awaitility-kotlin")
 }
 
 tasks.withType<Test> {
