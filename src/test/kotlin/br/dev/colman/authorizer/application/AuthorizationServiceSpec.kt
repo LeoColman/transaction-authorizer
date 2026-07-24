@@ -114,6 +114,15 @@ class AuthorizationServiceSpec : FunSpec({
         shouldThrow<IdempotencyConflictException> { service.authorize(divergent) }
     }
 
+    test("comando rejeita valor zero ou negativo (invariante do caso de uso)") {
+        shouldThrow<IllegalArgumentException> {
+            command.copy(amount = Money.brl(BigDecimal.ZERO))
+        }
+        shouldThrow<IllegalArgumentException> {
+            command.copy(amount = Money.brl(BigDecimal("-1.00")))
+        }
+    }
+
     test("mesmo valor com escala diferente ainda é replay legítimo (10.0 == 10.00)") {
         every { transactions.findById(transactionId) } returns stored
 

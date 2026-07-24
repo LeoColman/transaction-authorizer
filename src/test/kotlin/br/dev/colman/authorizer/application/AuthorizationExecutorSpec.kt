@@ -106,6 +106,16 @@ class AuthorizationExecutorSpec : FunSpec({
         result.balanceAfter shouldBe Money.brl(BigDecimal("0.00"))
     }
 
+    test("débito recusado com conta ausente na releitura de saldo lança AccountNotFoundException") {
+        every { accounts.findById(accountId) } returns account(balance = "30.00")
+        every { accounts.applyDebit(accountId, BigDecimal("40.00")) } returns null
+        every { accounts.currentBalance(accountId) } returns null
+
+        shouldThrow<AccountNotFoundException> { executor.execute(command(TransactionType.DEBIT, "40.00")) }
+
+        verify(exactly = 0) { transactions.insert(any()) }
+    }
+
     test("conta inexistente lança AccountNotFoundException e nada é gravado") {
         every { accounts.findById(accountId) } returns null
 

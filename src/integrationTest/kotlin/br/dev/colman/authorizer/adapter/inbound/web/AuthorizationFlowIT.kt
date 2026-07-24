@@ -35,11 +35,11 @@ class AuthorizationFlowIT(
             .build()
     }
 
-    private fun createAccount(): UUID {
+    private fun createAccount(status: AccountStatus = AccountStatus.ENABLED): UUID {
         val account = Account(
             id = UUID.randomUUID(),
             ownerId = UUID.randomUUID(),
-            status = AccountStatus.ENABLED,
+            status = status,
             createdAt = Instant.now(),
             balance = Money.zero(),
         )
@@ -125,6 +125,16 @@ class AuthorizationFlowIT(
 
             responses.filter { it.statusCode == HttpStatus.OK } shouldHaveSize 10
             accounts.currentBalance(accountId)!! shouldBeEqualComparingTo BigDecimal("90.00")
+        }
+
+        test("conta desabilitada responde 422 problem detail e saldo não muda") {
+            val accountId = createAccount(status = AccountStatus.DISABLED)
+
+            val response = post(UUID.randomUUID(), body(accountId, "CREDIT", "10.00"))
+
+            response.statusCode shouldBe HttpStatus.UNPROCESSABLE_CONTENT
+            response.body!! shouldContain "account-disabled"
+            accounts.currentBalance(accountId)!! shouldBeEqualComparingTo BigDecimal.ZERO
         }
 
         test("conta inexistente responde 404 problem detail") {

@@ -46,6 +46,10 @@ class AccountRepositoryIT(
             stored.balance.value shouldBeEqualComparingTo BigDecimal.ZERO
         }
 
+        test("insertAll com lista vazia retorna 0") {
+            accounts.insertAll(emptyList()) shouldBe 0
+        }
+
         test("crédito atômico soma e retorna o novo saldo") {
             val account = newAccount()
             accounts.insertAll(listOf(account))

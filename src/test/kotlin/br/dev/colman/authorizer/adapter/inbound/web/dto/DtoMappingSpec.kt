@@ -67,6 +67,28 @@ class DtoMappingSpec : FunSpec({
         amount.currency shouldBe "BRL"
     }
 
+    test("toCommand exige campos presentes (defesa em profundidade além do Bean Validation)") {
+        val amount = AmountRequest(BigDecimal("1.00"), "BRL")
+
+        shouldThrow<IllegalArgumentException> {
+            AuthorizeTransactionRequest(null, TransactionType.CREDIT, amount).toCommand(transactionId)
+        }
+        shouldThrow<IllegalArgumentException> {
+            AuthorizeTransactionRequest(accountId, null, amount).toCommand(transactionId)
+        }
+        shouldThrow<IllegalArgumentException> {
+            AuthorizeTransactionRequest(accountId, TransactionType.CREDIT, null).toCommand(transactionId)
+        }
+        shouldThrow<IllegalArgumentException> {
+            AuthorizeTransactionRequest(accountId, TransactionType.CREDIT, AmountRequest(null, "BRL"))
+                .toCommand(transactionId)
+        }
+        shouldThrow<IllegalArgumentException> {
+            AuthorizeTransactionRequest(accountId, TransactionType.CREDIT, AmountRequest(BigDecimal("1.00"), null))
+                .toCommand(transactionId)
+        }
+    }
+
     test("resposta segue o contrato do desafio, com timestamp no fuso de apresentação") {
         val transaction = Transaction(
             id = transactionId,

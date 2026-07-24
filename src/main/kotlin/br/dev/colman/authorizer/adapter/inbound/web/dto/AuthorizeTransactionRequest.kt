@@ -23,12 +23,15 @@ data class AuthorizeTransactionRequest(
     @field:Valid
     val amount: AmountRequest?,
 ) {
-    fun toCommand(transactionId: UUID): AuthorizeTransactionCommand = AuthorizeTransactionCommand(
-        transactionId = transactionId,
-        accountId = requireNotNull(accountId),
-        type = requireNotNull(type),
-        amount = Money(requireNotNull(amount?.value), parseCurrency(requireNotNull(amount?.currency))),
-    )
+    fun toCommand(transactionId: UUID): AuthorizeTransactionCommand {
+        val amount = requireNotNull(amount)
+        return AuthorizeTransactionCommand(
+            transactionId = transactionId,
+            accountId = requireNotNull(accountId),
+            type = requireNotNull(type),
+            amount = Money(requireNotNull(amount.value), parseCurrency(requireNotNull(amount.currency))),
+        )
+    }
 
     private fun parseCurrency(code: String): Currency =
         runCatching { Currency.valueOf(code) }.getOrElse { throw UnsupportedCurrencyException(code) }

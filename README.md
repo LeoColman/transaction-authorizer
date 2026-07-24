@@ -1,8 +1,8 @@
 # Transaction Authorizer
 
-![Cobertura total](https://img.shields.io/badge/cobertura%20total-98.4%25-brightgreen)
-![Cobertura unitários](https://img.shields.io/badge/testes%20unit%C3%A1rios-61.4%25-yellow)
-![Cobertura integração](https://img.shields.io/badge/testes%20de%20integra%C3%A7%C3%A3o-94.9%25-brightgreen)
+![Cobertura total](https://img.shields.io/badge/cobertura%20total-99.7%25-brightgreen)
+![Cobertura unitários](https://img.shields.io/badge/testes%20unit%C3%A1rios-61.8%25-yellow)
+![Cobertura integração](https://img.shields.io/badge/testes%20de%20integra%C3%A7%C3%A3o-96.5%25-brightgreen)
 ![Fumaça](https://img.shields.io/badge/fuma%C3%A7a-15%2F15%20cen%C3%A1rios-brightgreen)
 ![Mutantes mortos](https://img.shields.io/badge/mutantes%20mortos-96.9%25-brightgreen)
 
@@ -161,9 +161,9 @@ Racional do mapeamento em [ADR-0004](docs/adr/0004-mapeamento-http.md).
 
 | Suíte | Cobertura de linhas | O que exercita |
 |---|---|---|
-| Unitários | 61,4% | Domínio, aplicação e mapeamento de DTOs — isolados com MockK |
-| Integração | 94,9% | Tudo acima + adaptadores reais: repositórios Postgres, controller, listener SQS |
-| **Total (unit + integração)** | **98,4%** | Gate de 80% no build (`koverVerify`) |
+| Unitários | 61,8% | Domínio, aplicação e mapeamento de DTOs — isolados com MockK |
+| Integração | 96,5% | Tudo acima + adaptadores reais: repositórios Postgres, controller, listener SQS |
+| **Total (unit + integração)** | **99,7%** | Gate de 80% no build (`koverVerify`) |
 
 A leitura correta dos números: na arquitetura hexagonal, adaptadores (SQL, HTTP,
 fila) são deliberadamente testados contra infraestrutura real na camada de
@@ -181,13 +181,18 @@ cobertura: a aplicação roda em container separado (JVM externa ao agente).
 Relatório em `build/reports/kover/html/index.html`. Excluídos da medição: classe de
 bootstrap e pacote `config` (wiring sem lógica), source sets de teste.
 
+O 0,3% restante (1 linha, 3 branches) é o guard de moeda cruzada em `Money` e no
+replay de `AuthorizationService`: com uma única moeda no enum (ADR-0003) é
+impossível construir o caso que o dispara. Fica como proteção para a evolução
+multi-moeda, mesma razão dos 2 sobreviventes de mutação abaixo.
+
 ### Testes de mutação (Pitest)
 
 Cobertura diz que uma linha foi executada; mutação diz se algum teste **falha quando o
 comportamento muda**. O Pitest injeta defeitos artificiais (inverte condições, remove
 chamadas, troca retornos) e verifica se a suíte unitária os detecta.
 
-**Resultado: 63 de 65 mutantes mortos (96,9%), zero mutantes sem cobertura.**
+**Resultado: 62 de 64 mutantes mortos (96,9%), zero mutantes sem cobertura.**
 Gate de 90% no build (`mutationThreshold`).
 
 ```bash
