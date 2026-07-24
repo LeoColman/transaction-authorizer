@@ -6,10 +6,8 @@
 ![Fumaça](https://img.shields.io/badge/fuma%C3%A7a-7%2F7%20cen%C3%A1rios-brightgreen)
 ![Mutantes mortos](https://img.shields.io/badge/mutantes%20mortos-96.6%25-brightgreen)
 
-<!-- Após publicar no GitHub, troque OWNER/REPO para ativar os escudos dinâmicos:
-![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)
-![Smoke](https://github.com/OWNER/REPO/actions/workflows/smoke.yml/badge.svg)
--->
+![CI](https://github.com/LeoColman/transaction-authorizer/actions/workflows/ci.yml/badge.svg)
+![Smoke](https://github.com/LeoColman/transaction-authorizer/actions/workflows/smoke.yml/badge.svg)
 
 API de autorização de transações financeiras (crédito e débito) com registro de contas
 via fila SQS, construída para alta volumetria com foco em **consistência**, **disponibilidade**
