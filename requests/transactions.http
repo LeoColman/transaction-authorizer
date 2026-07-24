@@ -1,0 +1,83 @@
+### Variáveis (ajuste o accountId para uma conta existente na sua fila)
+@baseUrl = http://localhost:8080
+@accountId = 5b19c8b6-0cc4-4c72-a989-0c2ee15fa975
+
+### Dica: pegue um accountId real consumindo a fila
+# aws --endpoint-url=http://localhost:4566 --region sa-east-1 sqs receive-message \
+#   --queue-url http://localhost:4566/000000000000/conta-bancaria-criada
+
+### Health check
+GET {{baseUrl}}/actuator/health
+
+### Crédito aprovado (200 SUCCEEDED)
+POST {{baseUrl}}/transactions/{{$uuid}}
+Content-Type: application/json
+
+{
+  "accountId": "{{accountId}}",
+  "type": "CREDIT",
+  "amount": { "value": 97.07, "currency": "BRL" }
+}
+
+### Débito aprovado (200 SUCCEEDED)
+POST {{baseUrl}}/transactions/{{$uuid}}
+Content-Type: application/json
+
+{
+  "accountId": "{{accountId}}",
+  "type": "DEBIT",
+  "amount": { "value": 10.00, "currency": "BRL" }
+}
+
+### Débito recusado por saldo insuficiente (422 FAILED, saldo intacto)
+POST {{baseUrl}}/transactions/{{$uuid}}
+Content-Type: application/json
+
+{
+  "accountId": "{{accountId}}",
+  "type": "DEBIT",
+  "amount": { "value": 999999.99, "currency": "BRL" }
+}
+
+### Idempotência: repita este request 2x, mesma resposta e X-Idempotent-Replay: true
+POST {{baseUrl}}/transactions/7e7ae808-b154-48b5-9f3e-553935cc4001
+Content-Type: application/json
+
+{
+  "accountId": "{{accountId}}",
+  "type": "CREDIT",
+  "amount": { "value": 1.00, "currency": "BRL" }
+}
+
+### Conta inexistente (404)
+POST {{baseUrl}}/transactions/{{$uuid}}
+Content-Type: application/json
+
+{
+  "accountId": "00000000-0000-0000-0000-000000000000",
+  "type": "CREDIT",
+  "amount": { "value": 10.00, "currency": "BRL" }
+}
+
+### Moeda não suportada (422 Problem Details)
+POST {{baseUrl}}/transactions/{{$uuid}}
+Content-Type: application/json
+
+{
+  "accountId": "{{accountId}}",
+  "type": "CREDIT",
+  "amount": { "value": 10.00, "currency": "USD" }
+}
+
+### Payload inválido: valor com 3 casas decimais (400)
+POST {{baseUrl}}/transactions/{{$uuid}}
+Content-Type: application/json
+
+{
+  "accountId": "{{accountId}}",
+  "type": "CREDIT",
+  "amount": { "value": 1.005, "currency": "BRL" }
+}
+
+### Métricas do autorizador
+GET {{baseUrl}}/actuator/prometheus
