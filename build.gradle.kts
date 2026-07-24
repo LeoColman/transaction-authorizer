@@ -76,6 +76,7 @@ dependencies {
     "integrationTestImplementation"("org.testcontainers:testcontainers-localstack")
     "integrationTestImplementation"("org.awaitility:awaitility-kotlin")
     "smokeTestImplementation"("org.awaitility:awaitility-kotlin")
+    "gatlingImplementation"("software.amazon.awssdk:sqs")
 }
 
 tasks.withType<Test> {
