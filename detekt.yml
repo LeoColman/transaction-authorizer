@@ -1,0 +1,18 @@
+# Ajustes sobre as regras padrão do detekt (buildUponDefaultConfig = true).
+# Cada desvio do padrão tem justificativa; o restante segue o default.
+
+style:
+  MaxLineLength:
+    # Kotlin idiomático com strings de mensagens em português estoura 120 com
+    # frequência sem perda de legibilidade.
+    maxLineLength: 140
+  MagicNumber:
+    # Números aqui são configuração autoexplicativa (tamanhos de lote, timeouts)
+    # ou valores monetários de teste; extrair constantes só afastaria o contexto.
+    active: false
+
+performance:
+  SpreadOperator:
+    # Bootstrap usa runApplication<...>(*args) (padrão Spring Boot) e o cenário
+    # Gatling usa a DSL varargs de checks; ambos rodam uma única vez.
+    excludes: ['**/TransactionAuthorizerApplication.kt', '**/gatling/**']

@@ -154,5 +154,29 @@ class AuthorizationFlowIT(
         test("transactionId que não é UUID responde 400") {
             post("nao-e-uuid", body(UUID.randomUUID(), "CREDIT", "10.00")).statusCode shouldBe HttpStatus.BAD_REQUEST
         }
+
+        test("mesmo transactionId com payload divergente responde 409 e não altera saldo") {
+            val accountId = createAccount()
+            val transactionId = UUID.randomUUID()
+            post(transactionId, body(accountId, "CREDIT", "5.00"))
+
+            val conflict = post(transactionId, body(accountId, "DEBIT", "999.99"))
+
+            conflict.statusCode shouldBe HttpStatus.CONFLICT
+            conflict.body!! shouldContain "idempotency-conflict"
+            accounts.currentBalance(accountId)!! shouldBeEqualComparingTo BigDecimal("5.00")
+        }
+
+        test("exceções do framework preservam o status HTTP nativo (405, 404, 415)") {
+            client.get().uri("/transactions/${UUID.randomUUID()}").retrieve()
+                .toEntity(String::class.java).statusCode shouldBe HttpStatus.METHOD_NOT_ALLOWED
+
+            client.get().uri("/rota-que-nao-existe").retrieve()
+                .toEntity(String::class.java).statusCode shouldBe HttpStatus.NOT_FOUND
+
+            client.post().uri("/transactions/${UUID.randomUUID()}")
+                .contentType(MediaType.TEXT_PLAIN).body("nao é json").retrieve()
+                .toEntity(String::class.java).statusCode shouldBe HttpStatus.UNSUPPORTED_MEDIA_TYPE
+        }
     }
 }

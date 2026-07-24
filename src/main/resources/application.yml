@@ -19,12 +19,9 @@ spring:
     aws:
       region:
         static: ${AWS_REGION:sa-east-1}
-      credentials:
-        access-key: ${AWS_ACCESS_KEY_ID:test}
-        secret-key: ${AWS_SECRET_ACCESS_KEY:test}
-      # Endpoint do LocalStack para execução local; em produção a propriedade
-      # AWS_ENDPOINT_URL não é definida e o SDK resolve o endpoint real da AWS.
-      endpoint: ${AWS_ENDPOINT_URL:http://localhost:4566}
+      # Sem endpoint nem credenciais estáticas aqui: em produção o SDK resolve o
+      # endpoint real da AWS e usa a cadeia padrão de credenciais (IAM role).
+      # LocalStack só existe no perfil "local" (ver documento abaixo).
 
 authorizer:
   presentation-timezone: ${PRESENTATION_TIMEZONE:America/Sao_Paulo}
@@ -41,7 +38,9 @@ management:
     health:
       probes:
         enabled: true
-      show-details: always
+      # Sem detalhes de infraestrutura para chamadores anônimos; probes e
+      # healthchecks só precisam do status agregado.
+      show-details: when-authorized
   metrics:
     tags:
       application: ${spring.application.name}
@@ -52,3 +51,16 @@ springdoc:
 
 server:
   shutdown: graceful
+
+---
+# Perfil "local": desenvolvimento com LocalStack (docker compose ativa json,local).
+spring:
+  config:
+    activate:
+      on-profile: local
+  cloud:
+    aws:
+      endpoint: ${AWS_ENDPOINT_URL:http://localhost:4566}
+      credentials:
+        access-key: ${AWS_ACCESS_KEY_ID:test}
+        secret-key: ${AWS_SECRET_ACCESS_KEY:test}

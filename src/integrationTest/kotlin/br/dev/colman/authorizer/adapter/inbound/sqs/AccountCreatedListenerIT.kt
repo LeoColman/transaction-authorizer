@@ -4,6 +4,7 @@ import br.dev.colman.authorizer.TestInfra
 import br.dev.colman.authorizer.application.port.outbound.AccountRepository
 import io.awspring.cloud.sqs.operations.SqsTemplate
 import io.kotest.core.spec.style.FunSpec
+import io.micrometer.core.instrument.MeterRegistry
 import io.kotest.matchers.comparables.shouldBeEqualComparingTo
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -19,6 +20,7 @@ import java.util.UUID
 class AccountCreatedListenerIT(
     private val sqsTemplate: SqsTemplate,
     private val accounts: AccountRepository,
+    private val meterRegistry: MeterRegistry,
 ) : FunSpec() {
 
     private fun accountPayload(id: UUID, owner: UUID = UUID.randomUUID(), createdAt: Long = 1634874339L) =
@@ -49,10 +51,14 @@ class AccountCreatedListenerIT(
             }
 
             accounts.applyCredit(accountId, BigDecimal("55.00"))
+            val duplicatedBefore = meterRegistry.counter("authorizer.accounts.duplicated").count()
             sqsTemplate.send(TestInfra.QUEUE_NAME, accountPayload(accountId))
 
-            // A mensagem reenviada precisa ser consumida sem sobrescrever a conta.
-            Thread.sleep(2000)
+            // Espera o consumo determinístico da redelivery (métrica de duplicada)
+            // e então verifica que a conta não foi sobrescrita.
+            await.atMost(Duration.ofSeconds(30)) untilAsserted {
+                meterRegistry.counter("authorizer.accounts.duplicated").count() shouldBe duplicatedBefore + 1
+            }
             accounts.currentBalance(accountId)!! shouldBeEqualComparingTo BigDecimal("55.00")
         }
 

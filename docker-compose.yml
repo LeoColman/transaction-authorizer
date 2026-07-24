@@ -90,7 +90,7 @@ services:
       - AWS_REGION=sa-east-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
-      - SPRING_PROFILES_ACTIVE=json
+      - SPRING_PROFILES_ACTIVE=json,local
     ports:
       - "127.0.0.1:8080:8080"
     healthcheck:

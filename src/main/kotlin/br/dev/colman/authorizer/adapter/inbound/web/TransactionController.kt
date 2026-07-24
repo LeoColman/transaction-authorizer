@@ -36,8 +36,12 @@ class TransactionController(
     )
     @ApiResponses(
         ApiResponse(responseCode = "200", description = "Transação APROVADA (status SUCCEEDED)"),
-        ApiResponse(responseCode = "422", description = "Transação RECUSADA (status FAILED, ex.: saldo insuficiente), conta desabilitada ou moeda não suportada"),
+        ApiResponse(
+            responseCode = "422",
+            description = "Transação RECUSADA (status FAILED, ex.: saldo insuficiente), conta desabilitada ou moeda não suportada",
+        ),
         ApiResponse(responseCode = "404", description = "Conta não encontrada"),
+        ApiResponse(responseCode = "409", description = "Mesmo transactionId com payload divergente do original"),
         ApiResponse(responseCode = "400", description = "Payload inválido"),
     )
     @PostMapping("/transactions/{transactionId}")

@@ -3,6 +3,7 @@ package br.dev.colman.authorizer.application
 import br.dev.colman.authorizer.application.port.inbound.AuthorizeTransactionCommand
 import br.dev.colman.authorizer.application.port.outbound.AccountRepository
 import br.dev.colman.authorizer.application.port.outbound.TransactionRepository
+import br.dev.colman.authorizer.domain.Account
 import br.dev.colman.authorizer.domain.AccountDisabledException
 import br.dev.colman.authorizer.domain.AccountNotFoundException
 import br.dev.colman.authorizer.domain.Money
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 import java.time.Clock
 import java.time.temporal.ChronoUnit
+import java.util.UUID
 
 /**
  * Executa uma autorização dentro de uma única transação de banco:
@@ -35,9 +37,7 @@ class AuthorizationExecutor(
 
     @Transactional
     fun execute(command: AuthorizeTransactionCommand): Transaction {
-        val account = accounts.findById(command.accountId)
-            ?: throw AccountNotFoundException(command.accountId)
-        if (!account.isEnabled()) throw AccountDisabledException(account.id)
+        val account = loadEnabledAccount(command.accountId)
 
         val newBalance = when (command.type) {
             TransactionType.CREDIT -> accounts.applyCredit(account.id, command.amount.normalized)
@@ -56,6 +56,12 @@ class AuthorizationExecutor(
 
         transactions.insert(transaction)
         return transaction
+    }
+
+    private fun loadEnabledAccount(accountId: UUID): Account {
+        val account = accounts.findById(accountId) ?: throw AccountNotFoundException(accountId)
+        if (!account.isEnabled()) throw AccountDisabledException(account.id)
+        return account
     }
 
     private fun authorized(

@@ -49,6 +49,16 @@ Content-Type: application/json
   "amount": { "value": 1.00, "currency": "BRL" }
 }
 
+### Conflito de idempotência (409): repita trocando o valor, mesmo transactionId
+POST {{baseUrl}}/transactions/7e7ae808-b154-48b5-9f3e-553935cc4002
+Content-Type: application/json
+
+{
+  "accountId": "{{accountId}}",
+  "type": "CREDIT",
+  "amount": { "value": 2.00, "currency": "BRL" }
+}
+
 ### Conta inexistente (404)
 POST {{baseUrl}}/transactions/{{$uuid}}
 Content-Type: application/json

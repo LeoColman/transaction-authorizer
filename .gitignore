@@ -10,3 +10,6 @@ out/
 .DS_Store
 *.log
 *.hprof
+
+# O enunciado do desafio não pode entrar no repositório
+*.pdf

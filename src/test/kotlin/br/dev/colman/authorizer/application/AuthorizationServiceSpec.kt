@@ -3,6 +3,7 @@ package br.dev.colman.authorizer.application
 import br.dev.colman.authorizer.application.port.inbound.AuthorizeTransactionCommand
 import br.dev.colman.authorizer.application.port.outbound.TransactionRepository
 import br.dev.colman.authorizer.domain.DuplicateTransactionException
+import br.dev.colman.authorizer.domain.IdempotencyConflictException
 import br.dev.colman.authorizer.domain.Money
 import br.dev.colman.authorizer.domain.Transaction
 import br.dev.colman.authorizer.domain.TransactionStatus
@@ -84,5 +85,40 @@ class AuthorizationServiceSpec : FunSpec({
         every { executor.execute(command) } throws DuplicateTransactionException(transactionId)
 
         shouldThrow<IllegalStateException> { service.authorize(command) }
+    }
+
+    test("mesmo transactionId com valor diferente é conflito de idempotência, não replay") {
+        every { transactions.findById(transactionId) } returns stored
+
+        val divergent = command.copy(amount = Money.brl(BigDecimal("99.99")))
+
+        shouldThrow<IdempotencyConflictException> { service.authorize(divergent) }
+    }
+
+    test("mesmo transactionId com tipo ou conta diferente é conflito de idempotência") {
+        every { transactions.findById(transactionId) } returns stored
+
+        shouldThrow<IdempotencyConflictException> {
+            service.authorize(command.copy(type = TransactionType.DEBIT))
+        }
+        shouldThrow<IdempotencyConflictException> {
+            service.authorize(command.copy(accountId = UUID.randomUUID()))
+        }
+    }
+
+    test("corrida com payload divergente também é conflito, não replay silencioso") {
+        val divergent = command.copy(amount = Money.brl(BigDecimal("99.99")))
+        every { transactions.findById(transactionId) } returns null andThen stored
+        every { executor.execute(divergent) } throws DuplicateTransactionException(transactionId)
+
+        shouldThrow<IdempotencyConflictException> { service.authorize(divergent) }
+    }
+
+    test("mesmo valor com escala diferente ainda é replay legítimo (10.0 == 10.00)") {
+        every { transactions.findById(transactionId) } returns stored
+
+        val result = service.authorize(command.copy(amount = Money.brl(BigDecimal("10.0"))))
+
+        result.replayed shouldBe true
     }
 })

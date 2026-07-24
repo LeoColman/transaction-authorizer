@@ -6,6 +6,7 @@ plugins {
     id("io.gatling.gradle") version "3.15.1.2"
     id("org.jetbrains.kotlinx.kover") version "0.9.9"
     id("info.solidsoft.pitest") version "1.19.0"
+    id("io.gitlab.arturbosch.detekt") version "1.23.8"
 }
 
 group = "br.dev.colman"
@@ -143,6 +144,31 @@ pitest {
     avoidCallsTo = setOf("kotlin.jvm.internal", "org.slf4j")
     // Gate: score mínimo de mutação (%). Sobreviventes conhecidos documentados no README.
     mutationThreshold = 90
+}
+
+// O runtime do detekt 1.23.x é compilado com Kotlin 2.0; fixa a versão do
+// Kotlin no classpath da ferramenta (não afeta a compilação do projeto).
+configurations.matching { it.name == "detekt" }.all {
+    resolutionStrategy.eachDependency {
+        if (requested.group == "org.jetbrains.kotlin") {
+            useVersion("2.0.21")
+        }
+    }
+}
+
+detekt {
+    // Regras padrão do detekt com ajustes pontuais em detekt.yml; roda no check.
+    buildUponDefaultConfig = true
+    config.setFrom(files("detekt.yml"))
+    source.setFrom(
+        files(
+            "src/main/kotlin",
+            "src/test/kotlin",
+            "src/integrationTest/kotlin",
+            "src/smokeTest/kotlin",
+            "src/gatling/kotlin",
+        ),
+    )
 }
 
 // Modo de cobertura: -PkoverMode=unit | integration | all (padrão).

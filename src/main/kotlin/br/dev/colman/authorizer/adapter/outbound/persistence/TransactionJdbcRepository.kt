@@ -51,7 +51,7 @@ class TransactionJdbcRepository(
                 .param("createdAt", OffsetDateTime.ofInstant(transaction.timestamp, ZoneOffset.UTC))
                 .update()
         } catch (e: DuplicateKeyException) {
-            throw DuplicateTransactionException(transaction.id)
+            throw DuplicateTransactionException(transaction.id, e)
         }
     }
 

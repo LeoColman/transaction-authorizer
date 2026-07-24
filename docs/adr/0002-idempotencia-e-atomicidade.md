@@ -42,6 +42,11 @@ Recusas também são gravadas: a decisão de um `transactionId` é imutável, e 
 devolve resposta idêntica byte a byte (timestamp truncado em micros, precisão do
 timestamptz).
 
+Replay só vale para payload idêntico (conta, tipo, valor e moeda). Mesmo
+`transactionId` com payload divergente indica bug do cliente na geração de ids;
+responder o resultado original em silêncio esconderia o bug, então a resposta é
+409 (conflito de idempotência) sem alterar saldo.
+
 ## Alternativas consideradas
 
 - **Lock otimista com versão** (read, compute, CAS, retry): mais código, mais round-trips

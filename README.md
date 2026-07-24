@@ -1,10 +1,10 @@
 # Transaction Authorizer
 
-![Cobertura total](https://img.shields.io/badge/cobertura%20total-97.7%25-brightgreen)
-![Cobertura unitários](https://img.shields.io/badge/testes%20unit%C3%A1rios-57.9%25-yellow)
-![Cobertura integração](https://img.shields.io/badge/testes%20de%20integra%C3%A7%C3%A3o-94.7%25-brightgreen)
+![Cobertura total](https://img.shields.io/badge/cobertura%20total-98.4%25-brightgreen)
+![Cobertura unitários](https://img.shields.io/badge/testes%20unit%C3%A1rios-61.4%25-yellow)
+![Cobertura integração](https://img.shields.io/badge/testes%20de%20integra%C3%A7%C3%A3o-94.9%25-brightgreen)
 ![Fumaça](https://img.shields.io/badge/fuma%C3%A7a-7%2F7%20cen%C3%A1rios-brightgreen)
-![Mutantes mortos](https://img.shields.io/badge/mutantes%20mortos-96.6%25-brightgreen)
+![Mutantes mortos](https://img.shields.io/badge/mutantes%20mortos-96.9%25-brightgreen)
 
 ![CI](https://github.com/LeoColman/transaction-authorizer/actions/workflows/ci.yml/badge.svg)
 ![Smoke](https://github.com/LeoColman/transaction-authorizer/actions/workflows/smoke.yml/badge.svg)
@@ -77,6 +77,11 @@ Sobe LocalStack (SQS), gerador de 100.000 contas do desafio, PostgreSQL e a apli
 em `http://localhost:8080`. Aguarde `message-generator exited with code 0`; a aplicação
 começa a consumir a fila imediatamente.
 
+Para rodar a aplicação fora do Docker, ative o perfil `local`
+(`SPRING_PROFILES_ACTIVE=local`): é ele que aponta o SQS para o LocalStack. Sem esse
+perfil a aplicação assume ambiente de produção real (endpoint AWS e cadeia padrão de
+credenciais, ex.: IAM role).
+
 - Swagger UI: `http://localhost:8080/swagger-ui.html`
 - Health: `http://localhost:8080/actuator/health`
 - Métricas Prometheus: `http://localhost:8080/actuator/prometheus`
@@ -121,6 +126,7 @@ Resposta (contrato do desafio):
 | Recusada (saldo insuficiente) | 422 | Envelope acima, `status: FAILED`, saldo intacto |
 | Conta inexistente | 404 | Problem Details (RFC 9457) |
 | Conta desabilitada / moeda não suportada | 422 | Problem Details |
+| Mesmo `transactionId` com payload divergente | 409 | Problem Details (conflito de idempotência) |
 | Payload inválido | 400 | Problem Details |
 
 Racional do mapeamento em [ADR-0004](docs/adr/0004-mapeamento-http.md).
@@ -132,6 +138,7 @@ Racional do mapeamento em [ADR-0004](docs/adr/0004-mapeamento-http.md).
 ./gradlew integrationTest   # integração (Testcontainers: Postgres + LocalStack)
 ./gradlew smokeTest         # fumaça contra instância real (docker compose up antes)
 ./gradlew gatlingRun        # carga (docker compose up antes)
+./gradlew detekt            # análise estática (roda também no check/CI)
 ```
 
 - **Unitários**: domínio e aplicação puros, corner cases (débito exato zerando conta,
@@ -154,9 +161,9 @@ Racional do mapeamento em [ADR-0004](docs/adr/0004-mapeamento-http.md).
 
 | Suíte | Cobertura de linhas | O que exercita |
 |---|---|---|
-| Unitários | 57,9% | Domínio (96%), aplicação (85%+), mapeamento de DTOs (94%) — isolados com MockK |
-| Integração | 94,7% | Tudo acima + adaptadores reais: repositórios Postgres, controller, listener SQS |
-| **Total (unit + integração)** | **97,7%** | Gate de 80% no build (`koverVerify`) |
+| Unitários | 61,4% | Domínio, aplicação e mapeamento de DTOs — isolados com MockK |
+| Integração | 94,9% | Tudo acima + adaptadores reais: repositórios Postgres, controller, listener SQS |
+| **Total (unit + integração)** | **98,4%** | Gate de 80% no build (`koverVerify`) |
 
 A leitura correta dos números: na arquitetura hexagonal, adaptadores (SQL, HTTP,
 fila) são deliberadamente testados contra infraestrutura real na camada de
@@ -180,7 +187,7 @@ Cobertura diz que uma linha foi executada; mutação diz se algum teste **falha 
 comportamento muda**. O Pitest injeta defeitos artificiais (inverte condições, remove
 chamadas, troca retornos) e verifica se a suíte unitária os detecta.
 
-**Resultado: 56 de 58 mutantes mortos (96,6%), zero mutantes sem cobertura.**
+**Resultado: 63 de 65 mutantes mortos (96,9%), zero mutantes sem cobertura.**
 Gate de 90% no build (`mutationThreshold`).
 
 ```bash
@@ -265,5 +272,10 @@ expand/contract (nunca quebrar a versão N-1, que continua rodando durante o shi
 - **Outbox pattern** para publicar eventos `transaction-authorized` sem dual-write.
 - **Particionamento** da tabela `accounts` por hash de `account_id` para escala de escrita
   horizontal (Citus ou particionamento nativo).
+- **Retenção de `transactions`**: a tabela cresce indefinidamente (cada autorização é uma
+  linha imutável). Em produção: particionamento por tempo (`created_at`) com desanexação
+  de partições antigas para storage frio (S3/Parquet), mantendo online a janela exigida
+  pelo extrato e pela auditoria. O replay idempotente só precisa da janela de retentativa
+  dos clientes (dias, não anos).
 - **Testes de caos** (falha de banco no meio da autorização) e **testes de contrato**
   (Pact) para os consumidores da API.

@@ -19,7 +19,9 @@ do cliente nem do servidor, e o cliente precisa distinguir recusa de falha.
 | Conta inexistente | 404 | Problem Details (RFC 9457) |
 | Conta desabilitada | 422 | Problem Details |
 | Moeda não suportada | 422 | Problem Details |
+| Mesmo `transactionId` com payload divergente | 409 | Problem Details |
 | Payload inválido | 400 | Problem Details |
+| Método/rota/content-type inválidos | 405/404/415 | Problem Details do framework |
 
 - Recusa usa **422 com o envelope completo** (não Problem Details): o resultado é
   distinguível tanto pelo status HTTP (clientes/gateways não retentam 4xx) quanto pelo
