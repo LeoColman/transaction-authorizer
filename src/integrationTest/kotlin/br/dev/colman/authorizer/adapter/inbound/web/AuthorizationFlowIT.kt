@@ -201,6 +201,34 @@ class AuthorizationFlowIT(
             accounts.currentBalance(accountId)!! shouldBeEqualComparingTo BigDecimal("5.00")
         }
 
+        test("Accept incompatível responde 406 SEM executar a autorização (saldo intacto)") {
+            val accountId = createAccount()
+            val transactionId = UUID.randomUUID()
+
+            val response = client.post().uri("/transactions/$transactionId")
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.TEXT_PLAIN)
+                .body(body(accountId, "CREDIT", "5.00"))
+                .retrieve()
+                .toEntity(String::class.java)
+
+            response.statusCode shouldBe HttpStatus.NOT_ACCEPTABLE
+            // A rejeição precisa acontecer ANTES do caso de uso: nada creditado, nada gravado.
+            accounts.currentBalance(accountId)!! shouldBeEqualComparingTo BigDecimal.ZERO
+            post(transactionId, body(accountId, "CREDIT", "5.00"))
+                .headers.getFirst("X-Idempotent-Replay") shouldBe "false"
+        }
+
+        test("Accept application/yaml também é rejeitado com 406 (API é JSON-only)") {
+            val accountId = createAccount()
+            client.post().uri("/transactions/${UUID.randomUUID()}")
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.parseMediaType("application/yaml"))
+                .body(body(accountId, "CREDIT", "5.00"))
+                .retrieve()
+                .toEntity(String::class.java).statusCode shouldBe HttpStatus.NOT_ACCEPTABLE
+        }
+
         test("exceções do framework preservam o status HTTP nativo (405, 404, 415)") {
             client.get().uri("/transactions/${UUID.randomUUID()}").retrieve()
                 .toEntity(String::class.java).statusCode shouldBe HttpStatus.METHOD_NOT_ALLOWED

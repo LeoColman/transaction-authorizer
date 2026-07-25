@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
 import org.springframework.http.ProblemDetail
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.PathVariable
@@ -68,7 +69,11 @@ class TransactionController(
             content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
         ),
     )
-    @PostMapping("/transactions/{transactionId}")
+    // produces explícito: Accept incompatível é rejeitado (406) na fase de
+    // handler mapping, ANTES de executar a autorização. Sem isso, a negociação
+    // só falha na escrita da resposta, depois do commit: o dinheiro se moveria
+    // e o chamador receberia erro.
+    @PostMapping("/transactions/{transactionId}", produces = [MediaType.APPLICATION_JSON_VALUE])
     fun authorize(
         @PathVariable transactionId: UUID,
         @Valid @RequestBody request: AuthorizeTransactionRequest,
