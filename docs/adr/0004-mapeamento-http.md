@@ -21,6 +21,7 @@ do cliente nem do servidor, e o cliente precisa distinguir recusa de falha.
 | Moeda não suportada | 422 | Problem Details |
 | Mesmo `transactionId` com payload divergente | 409 | Problem Details |
 | Payload inválido | 400 | Problem Details |
+| `Accept` sem `application/json` | 406 | Problem Details (rejeitado ANTES de executar a autorização) |
 | Método/rota/content-type inválidos | 405/404/415 | Problem Details do framework |
 
 Exceção conhecida: requisições rejeitadas antes do DispatcherServlet não passam pelo

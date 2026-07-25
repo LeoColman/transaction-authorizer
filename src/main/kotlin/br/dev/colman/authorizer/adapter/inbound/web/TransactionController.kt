@@ -68,11 +68,18 @@ class TransactionController(
             description = "Payload inválido",
             content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
         ),
+        ApiResponse(
+            responseCode = "406",
+            description = "Accept não comporta application/json; rejeitado antes de executar a autorização",
+            content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
+        ),
     )
-    // produces explícito: Accept incompatível é rejeitado (406) na fase de
-    // handler mapping, ANTES de executar a autorização. Sem isso, a negociação
-    // só falha na escrita da resposta, depois do commit: o dinheiro se moveria
-    // e o chamador receberia erro.
+    // produces explícito: Accept que não comporta application/json é rejeitado
+    // (406) na fase de handler mapping, ANTES de executar a autorização. Sem
+    // isso, a negociação só falharia na escrita da resposta, depois do commit:
+    // o dinheiro se moveria e o chamador receberia erro. Qvalues (ex.: q=0)
+    // não participam da decisão do Spring MVC; servir a única representação
+    // nesses casos é permitido pela RFC 9110 §12.5.1.
     @PostMapping("/transactions/{transactionId}", produces = [MediaType.APPLICATION_JSON_VALUE])
     fun authorize(
         @PathVariable transactionId: UUID,
