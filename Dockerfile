@@ -23,11 +23,12 @@ COPY --from=build /app/build/libs/*.jar app.jar
 USER app
 EXPOSE 8080
 
-ENV JAVA_OPTS=""
 # Log JSON por padrão em qualquer deploy da imagem; sobrescrevível (compose usa json,local).
 ENV SPRING_PROFILES_ACTIVE="json"
 
-# As flags de memória ficam FIXAS aqui, não em JAVA_OPTS: uma task definition que
-# defina JAVA_OPTS substituiria a variável inteira e derrubaria em silêncio o
-# dimensionamento por cgroup e o fail-fast em OOM. JAVA_OPTS soma extras.
-ENTRYPOINT ["sh", "-c", "exec java -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError $JAVA_OPTS -jar app.jar"]
+# Flags de memória fixas e sem shell entre o init e a JVM. Sem `sh -c`, o java é
+# o PID 1 e recebe SIGTERM direto (graceful shutdown), e some o word-splitting de
+# uma variável expandida: um JAVA_OPTS com espaço dentro de um argumento quebrava
+# o boot com "Could not find or load main class". Ajuste extra de JVM entra por
+# JAVA_TOOL_OPTIONS, que a própria JVM lê e concatena, sem poder apagar estas.
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75.0", "-XX:+ExitOnOutOfMemoryError", "-jar", "app.jar"]

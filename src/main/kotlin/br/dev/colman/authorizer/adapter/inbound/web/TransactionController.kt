@@ -87,6 +87,12 @@ class TransactionController(
             description = "Corpo maior que o limite; rejeitado antes de executar a autorização",
             content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
         ),
+        ApiResponse(
+            responseCode = "503",
+            description = "Capacidade esgotada (pool de conexões, timeout). Nada foi gravado: " +
+                "a retentativa é segura, ver Retry-After",
+            content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
+        ),
     )
     // produces explícito: Accept que não comporta application/json é rejeitado
     // (406) na fase de handler mapping, ANTES de executar a autorização. Sem

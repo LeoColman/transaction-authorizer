@@ -42,7 +42,11 @@ class HeadResponseFramingFilter : OncePerRequestFilter() {
         chain.doFilter(request, contador)
 
         if (response.isCommitted) return
-        val jaEnquadrada = response.getHeader(HttpHeaders.TRANSFER_ENCODING) != null
+        // Handler de recurso estático já declara o tamanho real sem escrever no
+        // stream (o corpo de um HEAD não vai para o socket): sobrescrever com a
+        // contagem zerada anunciaria 0 byte para um bundle de megabytes.
+        val jaEnquadrada = response.getHeader(HttpHeaders.TRANSFER_ENCODING) != null ||
+            response.getHeader(HttpHeaders.CONTENT_LENGTH) != null
         if (!jaEnquadrada) response.setContentLengthLong(contador.bytesEscritos())
     }
 

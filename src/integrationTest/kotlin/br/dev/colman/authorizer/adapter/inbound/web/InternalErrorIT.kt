@@ -8,7 +8,7 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.mockk.every
 import org.springframework.boot.test.context.SpringBootTest
-import org.springframework.jdbc.CannotGetJdbcConnectionException
+import org.springframework.transaction.CannotCreateTransactionException
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
@@ -48,11 +48,13 @@ class InternalErrorIT : FunSpec() {
             response.body!! shouldNotContain "segredo interno"
         }
 
-        test("pool de conexões esgotado responde 503 com Retry-After, não 500") {
-            // Saturação é transitória: 500 misturaria falta de capacidade com
-            // defeito, tanto para o cliente quanto para o alarme de 5xx.
+        test("falha ao ABRIR a transação também responde 503, não 500") {
+            // Saturação dentro de um @Transactional chega como
+            // CannotCreateTransactionException, de hierarquia diferente da
+            // CannotGetJdbcConnectionException do fast-path — é o caminho da
+            // maioria do tráfego e precisa do mesmo tratamento.
             every { authorizeTransaction.authorize(any()) } throws
-                CannotGetJdbcConnectionException("Connection is not available, request timed out")
+                CannotCreateTransactionException("Could not open JDBC Connection for transaction")
 
             val response = RestClient.builder()
                 .baseUrl("http://localhost:$port")

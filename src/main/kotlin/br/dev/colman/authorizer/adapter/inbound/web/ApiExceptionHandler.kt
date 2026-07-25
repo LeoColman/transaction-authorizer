@@ -5,10 +5,11 @@ import br.dev.colman.authorizer.domain.AccountNotFoundException
 import br.dev.colman.authorizer.domain.IdempotencyConflictException
 import br.dev.colman.authorizer.domain.UnsupportedCurrencyException
 import org.slf4j.LoggerFactory
-import org.springframework.dao.DataAccessException
+import org.springframework.core.NestedRuntimeException
 import org.springframework.dao.TransientDataAccessException
 import org.springframework.http.HttpHeaders
 import org.springframework.jdbc.CannotGetJdbcConnectionException
+import org.springframework.transaction.CannotCreateTransactionException
 import org.springframework.http.HttpStatus
 import org.springframework.http.HttpStatusCode
 import org.springframework.http.ProblemDetail
@@ -91,11 +92,22 @@ class ApiExceptionHandler : ResponseEntityExceptionHandler() {
     /**
      * Falta de capacidade momentânea (pool de conexões esgotado, timeout de
      * consulta) não é defeito: 503 diz ao cliente que a retentativa é válida e
-     * separa saturação de bug nos alarmes de 5xx. Sem escrita no banco antes do
-     * erro, então retentar é seguro.
+     * separa saturação de bug nos alarmes de 5xx.
+     *
+     * As três exceções cobrem os pontos onde a saturação aparece e o dinheiro
+     * ainda não se moveu: leitura fora de transação (o fast-path de replay),
+     * abertura da transação (`CannotCreateTransactionException`, o caminho mais
+     * comum aqui) e falha transitória dentro dela, que sofre rollback antes do
+     * commit. Falha no próprio commit é `TransactionSystemException`, fora desta
+     * lista de propósito: ali o resultado é incerto e sugerir retentativa seria
+     * irresponsável.
      */
-    @ExceptionHandler(CannotGetJdbcConnectionException::class, TransientDataAccessException::class)
-    fun temporariamenteIndisponivel(e: DataAccessException): ResponseEntity<ProblemDetail> {
+    @ExceptionHandler(
+        CannotGetJdbcConnectionException::class,
+        CannotCreateTransactionException::class,
+        TransientDataAccessException::class,
+    )
+    fun temporariamenteIndisponivel(e: NestedRuntimeException): ResponseEntity<ProblemDetail> {
         log.warn("Capacidade esgotada ao acessar o banco: {}", e.message)
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
             .header(HttpHeaders.RETRY_AFTER, "1")
