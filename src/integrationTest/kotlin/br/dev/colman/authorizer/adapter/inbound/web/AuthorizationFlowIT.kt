@@ -8,6 +8,7 @@ import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.comparables.shouldBeEqualComparingTo
 import io.kotest.matchers.ints.shouldBeLessThan
+import io.kotest.matchers.longs.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import org.springframework.boot.test.context.SpringBootTest
@@ -315,15 +316,19 @@ class AuthorizationFlowIT(
             accounts.currentBalance(accountId)!! shouldBeEqualComparingTo BigDecimal.ZERO
         }
 
-        test("HEAD declara enquadramento e não deixa o cliente esperando o fim da resposta") {
-            // Sem Content-Length nem Transfer-Encoding, um cliente keep-alive fica
-            // bloqueado até o servidor fechar a conexão.
-            val response = client.method(org.springframework.http.HttpMethod.HEAD)
+        test("HEAD anuncia o mesmo tamanho de corpo que o GET equivalente") {
+            // Sem enquadramento, um cliente keep-alive fica bloqueado até o servidor
+            // fechar a conexão; anunciar zero destravaria, mas mentiria o tamanho.
+            val corpoDoGet = client.get().uri("/actuator/health")
+                .retrieve().toEntity(String::class.java).body!!.toByteArray().size.toLong()
+
+            val head = client.method(org.springframework.http.HttpMethod.HEAD)
                 .uri("/actuator/health")
                 .retrieve()
                 .toBodilessEntity()
 
-            response.headers.contentLength shouldBe 0L
+            head.headers.contentLength shouldBe corpoDoGet
+            corpoDoGet shouldBeGreaterThan 0L
         }
 
         test("valor como string JSON é aceito e preserva a precisão") {
