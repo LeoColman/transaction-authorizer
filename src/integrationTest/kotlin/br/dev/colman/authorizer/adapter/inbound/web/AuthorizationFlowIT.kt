@@ -165,11 +165,21 @@ class AuthorizationFlowIT(
 
         test("moeda com tamanho fora do ISO 4217 responde 400 sem refletir o valor") {
             val accountId = createAccount()
+
+            val response = post(UUID.randomUUID(), body(accountId, "CREDIT", "10.00", currency = "REAIS"))
+
+            response.statusCode shouldBe HttpStatus.BAD_REQUEST
+            response.body!! shouldContain "invalid-request"
+        }
+
+        test("corpo acima do teto responde 413 sem ser lido nem refletido") {
+            val accountId = createAccount()
             val huge = "X".repeat(100_000)
 
             val response = post(UUID.randomUUID(), body(accountId, "CREDIT", "10.00", currency = huge))
 
-            response.statusCode shouldBe HttpStatus.BAD_REQUEST
+            response.statusCode shouldBe HttpStatus.CONTENT_TOO_LARGE
+            response.body!! shouldContain "payload-too-large"
             response.body!!.length shouldBeLessThan 2_000
         }
 

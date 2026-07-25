@@ -5,6 +5,7 @@ import br.dev.colman.authorizer.adapter.inbound.web.dto.TransactionResponse
 import br.dev.colman.authorizer.application.port.inbound.AuthorizeTransactionUseCase
 import io.micrometer.core.instrument.MeterRegistry
 import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.headers.Header
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
@@ -35,6 +36,9 @@ class TransactionController(
 
     private companion object {
         const val PROBLEM_JSON = "application/problem+json"
+        const val REPLAY_HEADER = "X-Idempotent-Replay"
+        const val REPLAY_HEADER_DESC =
+            "true quando a resposta é o replay de uma autorização anterior com o mesmo transactionId"
     }
 
     @Operation(
@@ -43,11 +47,16 @@ class TransactionController(
             "da autorização original, sem alterar o saldo novamente.",
     )
     @ApiResponses(
-        ApiResponse(responseCode = "200", description = "Transação APROVADA (status SUCCEEDED)"),
+        ApiResponse(
+            responseCode = "200",
+            description = "Transação APROVADA (status SUCCEEDED)",
+            headers = [Header(name = REPLAY_HEADER, description = REPLAY_HEADER_DESC, schema = Schema(type = "string"))],
+        ),
         ApiResponse(
             responseCode = "422",
             description = "Transação RECUSADA por saldo insuficiente (envelope completo, status FAILED); " +
                 "conta desabilitada ou moeda não suportada respondem Problem Details (RFC 9457)",
+            headers = [Header(name = REPLAY_HEADER, description = REPLAY_HEADER_DESC, schema = Schema(type = "string"))],
             content = [
                 Content(mediaType = "application/json", schema = Schema(implementation = TransactionResponse::class)),
                 Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class)),
@@ -71,6 +80,11 @@ class TransactionController(
         ApiResponse(
             responseCode = "406",
             description = "Accept não comporta application/json; rejeitado antes de executar a autorização",
+            content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
+        ),
+        ApiResponse(
+            responseCode = "413",
+            description = "Corpo maior que o limite; rejeitado antes de executar a autorização",
             content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
         ),
     )
