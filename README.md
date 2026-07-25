@@ -18,7 +18,7 @@ e **resiliência**.
 | Camada | Escolha | Por quê |
 |---|---|---|
 | Linguagem | Kotlin (JDK 21) | Null-safety, imutabilidade natural para dinheiro/transações |
-| Framework | Spring Boot 4 (WebMVC + virtual threads) | Maduro, observabilidade pronta, virtual threads dão alta concorrência sem stack reativo ([ADR-0006](docs/adr/0006-stack-spring-boot-4-jdbc-virtual-threads.md)) |
+| Framework | Spring Boot 4 (WebMVC + virtual threads) | Maduro, observabilidade pronta, virtual threads dão alta concorrência sem stack reativo nem coroutines — o I/O dominante é JDBC bloqueante ([ADR-0006](docs/adr/0006-stack-spring-boot-4-jdbc-virtual-threads.md)) |
 | Banco | PostgreSQL 17 | ACID; invariante de saldo garantida por UPDATE condicional atômico ([ADR-0001](docs/adr/0001-postgresql.md)) |
 | Mensageria | AWS SQS (LocalStack local) | Definido pelo desafio ([ADR-0005](docs/adr/0005-consumo-sqs.md)) |
 | Testes | Kotest, MockK, Testcontainers, Gatling | Pirâmide completa: unitário, integração, fumaça e carga |
@@ -229,7 +229,7 @@ Gate de 90% no build (`mutationThreshold`).
 | [0003](docs/adr/0003-somente-brl.md) | Somente BRL nesta versão |
 | [0004](docs/adr/0004-mapeamento-http.md) | 422 para recusa com envelope completo |
 | [0005](docs/adr/0005-consumo-sqs.md) | Consumo em lote, ack ON_SUCCESS, DLQ em produção |
-| [0006](docs/adr/0006-stack-spring-boot-4-jdbc-virtual-threads.md) | Spring Boot 4, JdbcClient sem JPA, MVC + virtual threads |
+| [0006](docs/adr/0006-stack-spring-boot-4-jdbc-virtual-threads.md) | Spring Boot 4, JdbcClient sem JPA, MVC + virtual threads (e por que não coroutines/WebFlux) |
 
 ## Deploy em cloud pública (proposta)
 
