@@ -23,7 +23,7 @@ do cliente nem do servidor, e o cliente precisa distinguir recusa de falha.
 | Payload inválido | 400 | Problem Details |
 | `Accept` sem `application/json` | 406 | Problem Details do framework (rejeitado ANTES de executar a autorização) |
 | Corpo maior que o limite (16 KiB) | 413 | Problem Details (rejeitado ANTES de executar a autorização) |
-| Corpo grande em requisição já rejeitada por content-type/método/Accept | 415/405/406 | O status da rejeição, sem 413: ninguém abre o corpo, que é descartado pelo container |
+| Corpo grande **sem `Content-Length`** em requisição rejeitada por content-type/método/Accept | 415/405/406 | O status da rejeição, sem 413: ninguém abre o corpo, que é descartado pelo container |
 | Método/rota/content-type inválidos | 405/404/415 | Problem Details do framework |
 | Pool de conexões esgotado / timeout no banco | 503 + `Retry-After` | Problem Details |
 
@@ -41,13 +41,18 @@ inatividade, não de duração total: um cliente que envia bytes devagar mantém
 conexão aberta, e limitar isso (taxa mínima, duração máxima) cabe ao API Gateway
 da arquitetura proposta.
 
-- **O teto de corpo vale para quem lê o corpo.** Quando o MVC rejeita antes disso
-  (content-type, método ou `Accept` incompatíveis), o corpo é descartado pelo
-  container no limite padrão dele. Alinhar esse limite ao teto da aplicação foi
-  testado e revertido: acima do limite o Tomcat encerra a conexão, e a resposta de
-  erro já está comitada, então não há como anunciar `Connection: close` — a
-  requisição seguinte do cliente se perderia em silêncio. Aceitar o descarte de
-  alguns KB extras preserva a conexão e não custa memória da aplicação.
+- **O teto de corpo é decidido pelo `Content-Length`, quando ele existe.** O filtro
+  roda antes do MVC, então um corpo declarado acima do teto responde 413 mesmo que
+  o content-type esteja errado — o tamanho é motivo suficiente de recusa, e o
+  Tomcat encerra a conexão anunciando `Connection: close`.
+- **Sem `Content-Length`, o teto só vale para quem lê o corpo.** Requisição chunked
+  que o MVC rejeita antes disso (content-type, método ou `Accept` incompatíveis)
+  tem o corpo descartado pelo container, no limite padrão dele, e a conexão é
+  preservada. Alinhar esse limite ao teto da aplicação foi testado e revertido:
+  acima dele o Tomcat encerra a conexão, mas a resposta de erro já está comitada e
+  não há como anunciar `Connection: close` — a requisição seguinte do cliente se
+  perderia em silêncio. Descartar alguns KB extras custa menos, e esse corpo nunca
+  chega à memória da aplicação.
 - **503 separa saturação de defeito**: esgotamento de pool e timeout de consulta são
   transitórios e ocorrem antes de qualquer escrita, então a retentativa é segura e o
   cliente é informado disso (`Retry-After`). Respondê-los como 500 misturaria falta de

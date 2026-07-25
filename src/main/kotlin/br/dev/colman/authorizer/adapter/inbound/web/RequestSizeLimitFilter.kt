@@ -26,15 +26,18 @@ import java.io.IOException
  * 413; se o converter Jackson o embrulhar (corpo JSON), o handler devolve 400.
  * O maior payload legítimo tem ~200 bytes.
  *
- * O limite depende de alguém abrir o stream, então requisições que o MVC rejeita
- * antes disso (content-type, método ou Accept incompatíveis) não passam por aqui:
- * o corpo é descartado pelo container até `max-swallow-size`, deixado no padrão
- * de propósito. Baixá-lo até este teto foi testado e reprovado: passando do
- * limite o Tomcat encerra a conexão, e nesse ponto a resposta de erro já foi
- * comitada, então não há como anunciar `Connection: close` (RFC 9112 §9.6) — a
- * requisição seguinte de um cliente com keep-alive se perderia em silêncio.
- * Descartar alguns KB a mais custa menos que quebrar a conexão de quem só errou
- * o content-type, e o corpo descartado nunca chega à memória da aplicação.
+ * Como este filtro roda antes do MVC, um Content-Length acima do teto vira 413
+ * mesmo quando o content-type também está errado: tamanho declarado já é motivo
+ * suficiente de recusa, e o Tomcat fecha a conexão anunciando `Connection: close`.
+ *
+ * Sem Content-Length o limite depende de alguém abrir o stream, então requisições
+ * chunked que o MVC rejeita antes disso não passam por aqui: o corpo é descartado
+ * pelo container até `max-swallow-size`, deixado no padrão de propósito. Baixá-lo
+ * até este teto foi testado e reprovado: passando do limite o Tomcat encerra a
+ * conexão, e nesse ponto a resposta de erro já foi comitada, então não há como
+ * anunciar `Connection: close` (RFC 9112 §9.6) — a requisição seguinte de um
+ * cliente com keep-alive se perderia em silêncio. Descartar alguns KB a mais custa
+ * menos, e esse corpo nunca chega à memória da aplicação.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)

@@ -1,10 +1,10 @@
 # Transaction Authorizer
 
-![Cobertura total](https://img.shields.io/badge/cobertura%20total-99.7%25-brightgreen)
-![Cobertura unitários](https://img.shields.io/badge/testes%20unit%C3%A1rios-61.8%25-yellow)
-![Cobertura integração](https://img.shields.io/badge/testes%20de%20integra%C3%A7%C3%A3o-96.5%25-brightgreen)
+![Cobertura total](https://img.shields.io/badge/cobertura%20total-97.5%25-brightgreen)
+![Cobertura unitários](https://img.shields.io/badge/testes%20unit%C3%A1rios-63.1%25-yellow)
+![Cobertura integração](https://img.shields.io/badge/testes%20de%20integra%C3%A7%C3%A3o-92.6%25-brightgreen)
 ![Fumaça](https://img.shields.io/badge/fuma%C3%A7a-15%2F15%20cen%C3%A1rios-brightgreen)
-![Mutantes mortos](https://img.shields.io/badge/mutantes%20mortos-96.9%25-brightgreen)
+![Mutantes mortos](https://img.shields.io/badge/mutantes%20mortos-97%25-brightgreen)
 
 ![CI](https://github.com/LeoColman/transaction-authorizer/actions/workflows/ci.yml/badge.svg)
 ![Smoke](https://github.com/LeoColman/transaction-authorizer/actions/workflows/smoke.yml/badge.svg)
@@ -176,16 +176,16 @@ Racional do mapeamento em [ADR-0004](docs/adr/0004-mapeamento-http.md).
 
 | Suíte | Cobertura de linhas | O que exercita |
 |---|---|---|
-| Unitários | 61,8% | Domínio, aplicação e mapeamento de DTOs — isolados com MockK |
-| Integração | 96,5% | Tudo acima + adaptadores reais: repositórios Postgres, controller, listener SQS |
-| **Total (unit + integração)** | **99,7%** | Gate de 80% no build (`koverVerify`) |
+| Unitários | 63,1% | Domínio, aplicação e mapeamento de DTOs — isolados com MockK |
+| Integração | 92,6% | Tudo acima + adaptadores reais: repositórios Postgres, controller, listener SQS |
+| **Total (unit + integração)** | **97,5%** | Gate de 80% no build (`koverVerify`) |
 
 A leitura correta dos números: na arquitetura hexagonal, adaptadores (SQL, HTTP,
 fila) são deliberadamente testados contra infraestrutura real na camada de
 integração, não com mocks na unitária. Por isso a suíte unitária cobre o núcleo de
 negócio e a de integração completa os adaptadores. Medida apenas contra os pacotes
 que são responsabilidade dela (domínio, aplicação, DTOs e listener — o mesmo escopo
-do Pitest), a suíte unitária cobre **99,4%**; os 61,8% acima incluem os adaptadores
+do Pitest), a suíte unitária cobre **98,6%**; os 63,1% acima incluem os adaptadores
 JDBC e web, que por decisão pertencem à integração. Fumaça e carga não medem
 cobertura: a aplicação roda em container separado (JVM externa ao agente).
 
@@ -210,7 +210,7 @@ Cobertura diz que uma linha foi executada; mutação diz se algum teste **falha 
 comportamento muda**. O Pitest injeta defeitos artificiais (inverte condições, remove
 chamadas, troca retornos) e verifica se a suíte unitária os detecta.
 
-**Resultado: 62 de 64 mutantes mortos (96,9%), zero mutantes sem cobertura.**
+**Resultado: 66 de 68 mutantes mortos (97%), zero mutantes sem cobertura.**
 Gate de 90% no build (`mutationThreshold`).
 
 ```bash
