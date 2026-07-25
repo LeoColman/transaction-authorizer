@@ -40,9 +40,15 @@ data class AuthorizeTransactionRequest(
 }
 
 data class AmountRequest(
-    // Teto de UMA transação: 15 dígitos inteiros, deliberadamente abaixo do teto
-    // da coluna NUMERIC(19,2) (17 dígitos, ver Money.MAX) para que o saldo tenha
-    // margem de acumulação em vez de uma única transação poder enchê-la.
+    // Teto de UMA transação: 13 dígitos inteiros (~10 trilhões), somando 15
+    // dígitos significativos com os centavos. O contrato do desafio transporta
+    // o valor como NÚMERO JSON, e todo cliente que o desserializa em IEEE-754
+    // double (JavaScript, Python) só faz round-trip exato até 15 dígitos
+    // significativos: com 17 (o teto anterior), mais de 80% dos valores chegam
+    // com o centavo alterado ANTES de qualquer validação, sem erro visível.
+    // O limite mantém o formato do contrato e torna a corrupção impossível.
+    // Fica também abaixo do teto da coluna NUMERIC(19,2) (17 dígitos, ver
+    // Money.MAX), deixando margem para o saldo acumular.
     // DecimalMax e Digits declaram o MESMO teto: DecimalMax compara por valor
     // (compareTo, à prova de overflow) e barra notação exponencial com escala
     // absurda que passaria pelo Digits (cujo cálculo precision - scale estoura
@@ -50,8 +56,8 @@ data class AmountRequest(
     // faria o schema OpenAPI publicar um máximo que o servidor rejeita.
     @field:NotNull(message = "amount.value é obrigatório")
     @field:DecimalMin(value = "0.01", message = "amount.value deve ser no mínimo 0.01")
-    @field:DecimalMax(value = "999999999999999.99", message = "amount.value excede o valor máximo suportado")
-    @field:Digits(integer = 15, fraction = 2, message = "amount.value deve ter no máximo 15 dígitos inteiros e 2 casas decimais")
+    @field:DecimalMax(value = "9999999999999.99", message = "amount.value excede o valor máximo suportado")
+    @field:Digits(integer = 13, fraction = 2, message = "amount.value deve ter no máximo 13 dígitos inteiros e 2 casas decimais")
     val value: BigDecimal?,
 
     // Só o tamanho é validado aqui (contém o dano de payloads gigantes sem

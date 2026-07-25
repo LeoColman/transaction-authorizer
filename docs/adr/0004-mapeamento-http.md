@@ -28,11 +28,13 @@ do cliente nem do servidor, e o cliente precisa distinguir recusa de falha.
 Rejeições antes do controller têm dois níveis. O filtro de tamanho da aplicação
 (`RequestSizeLimitFilter`) roda na cadeia de servlet e responde Problem Details
 próprio (413). Já rejeições no nível do container/conector, que nem chegam ao MVC,
-respondem no formato do Boot/Tomcat: TRACE bloqueado responde o formato de erro
-padrão do Boot; a valve de erro do host é substituída por uma sem corpo (nenhuma
-página HTML nem versão de servidor); e falhas de parse no próprio conector (ex.:
-`%00` no path) respondem a página mínima do Tomcat, que não passa por valve alguma
-mas também não identifica versão de servidor.
+respondem no formato do Boot/Tomcat: TRACE bloqueado e timeout de requisição
+incompleta (408) respondem o formato de erro padrão do Boot; a valve de erro do
+host é substituída por uma sem corpo (nenhuma página HTML nem versão de servidor);
+e falhas de parse no próprio conector (ex.: `%00` no path) respondem a página
+mínima do Tomcat, que não passa por valve alguma mas também não identifica versão
+de servidor. O 408 é contido por `server.tomcat.connection-timeout` (10s), para
+que um corpo que nunca chega não prenda conexão e thread por minutos.
 
 - Recusa usa **422 com o envelope completo** (não Problem Details): o resultado é
   distinguível tanto pelo status HTTP (clientes/gateways não retentam 4xx) quanto pelo

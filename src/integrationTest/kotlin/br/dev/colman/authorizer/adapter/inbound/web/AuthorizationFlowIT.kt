@@ -239,13 +239,26 @@ class AuthorizationFlowIT(
                 .toEntity(String::class.java).statusCode shouldBe HttpStatus.NOT_ACCEPTABLE
         }
 
-        test("teto de valor por transação: 15 dígitos aceito, 16 rejeitado") {
+        test("teto de valor por transação: 13 dígitos aceito, 14 rejeitado") {
             val accountId = createAccount()
 
-            post(UUID.randomUUID(), body(accountId, "CREDIT", "999999999999999.99"))
+            post(UUID.randomUUID(), body(accountId, "CREDIT", "9999999999999.99"))
                 .statusCode shouldBe HttpStatus.OK
-            post(UUID.randomUUID(), body(accountId, "CREDIT", "1000000000000000.00"))
+            post(UUID.randomUUID(), body(accountId, "CREDIT", "10000000000000.00"))
                 .statusCode shouldBe HttpStatus.BAD_REQUEST
+        }
+
+        test("todo valor aceito sobrevive ao round-trip por IEEE-754 double (contrato usa número JSON)") {
+            val accountId = createAccount()
+            val teto = BigDecimal("9999999999999.99")
+
+            // O que um cliente JS/Python faz: número JSON -> double -> serializa.
+            // Se o teto cair na faixa imprecisa do double, o centavo muda calado.
+            BigDecimal(teto.toDouble().toString()).compareTo(teto) shouldBe 0
+
+            val response = post(UUID.randomUUID(), body(accountId, "CREDIT", teto.toPlainString()))
+            response.statusCode shouldBe HttpStatus.OK
+            response.body!! shouldContain """"value":9999999999999.99"""
         }
 
         test("o teto publicado no OpenAPI é o mesmo que o servidor aceita") {

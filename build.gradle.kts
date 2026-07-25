@@ -116,6 +116,9 @@ tasks.check {
 }
 
 springBoot {
+    // Expõe versão e horário do build em /actuator/info. O timestamp faz o jar
+    // não ser idêntico byte a byte entre dois builds do mesmo commit; a
+    // rastreabilidade em produção vale mais que reprodutibilidade bit-a-bit aqui.
     buildInfo()
 }
 

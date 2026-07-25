@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.messaging.Message
 import org.springframework.stereotype.Component
 import java.time.Instant
+import java.time.OffsetDateTime
 import java.util.UUID
 
 /**
@@ -66,6 +67,28 @@ data class AccountCreatedMessage(val account: Payload) {
         id = account.id,
         ownerId = account.owner,
         status = AccountStatus.valueOf(account.status),
-        createdAt = Instant.ofEpochSecond(account.createdAt.toLong()),
+        createdAt = createdAtInstant(),
     )
+
+    /**
+     * A faixa é validada AQUI, dentro do runCatching do parse. Um timestamp
+     * absurdo (ex.: nanossegundos enviados como segundos) é aceito por
+     * Instant.ofEpochSecond mas estoura na conversão para OffsetDateTime feita
+     * só na escrita: seria uma falha de "infraestrutura", o lote inteiro voltaria
+     * para a fila e a mesma mensagem falharia para sempre, sem nunca contar como
+     * inválida. Validando no parse, ela é descartada individualmente com métrica,
+     * como o ADR-0005 define para mensagem malformada.
+     */
+    private fun createdAtInstant(): Instant {
+        val instant = Instant.ofEpochSecond(account.createdAt.toLong())
+        require(instant in MIN_CREATED_AT..MAX_CREATED_AT) {
+            "created_at fora da faixa suportada: ${account.createdAt}"
+        }
+        return instant
+    }
+
+    private companion object {
+        val MIN_CREATED_AT: Instant = OffsetDateTime.parse("0001-01-01T00:00:00Z").toInstant()
+        val MAX_CREATED_AT: Instant = OffsetDateTime.parse("9999-12-31T23:59:59Z").toInstant()
+    }
 }

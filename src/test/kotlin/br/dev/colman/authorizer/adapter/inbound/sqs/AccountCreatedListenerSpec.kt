@@ -69,6 +69,31 @@ class AccountCreatedListenerSpec : FunSpec({
         meterRegistry.counter("authorizer.sqs.messages.invalid").count() shouldBe 2.0
     }
 
+    test("created_at absurdo é mensagem inválida, não veneno que trava o lote") {
+        val captured = slot<List<NewAccount>>()
+        every { registerAccounts.register(capture(captured)) } returns 1
+
+        // Instant.MAX em epoch-seconds: passa por Instant.ofEpochSecond mas
+        // estouraria só na escrita, derrubando o lote em redelivery infinito.
+        val veneno = payload(createdAt = 31556889864403199L)
+        val boa = payload()
+
+        listener.onMessages(listOf(veneno, boa).map { MessageBuilder.withPayload(it).build() })
+
+        captured.captured.size shouldBe 1
+        meterRegistry.counter("authorizer.sqs.messages.invalid").count() shouldBe 1.0
+    }
+
+    test("created_at dentro da faixa suportada continua aceito, inclusive anterior a 1970") {
+        val captured = slot<List<NewAccount>>()
+        every { registerAccounts.register(capture(captured)) } returns 1
+
+        listener.onMessages(listOf(MessageBuilder.withPayload(payload(createdAt = -100L)).build()))
+
+        captured.captured.single().createdAt shouldBe Instant.ofEpochSecond(-100L)
+        meterRegistry.counter("authorizer.sqs.messages.invalid").count() shouldBe 0.0
+    }
+
     test("status desconhecido é tratado como mensagem inválida (parse estrito)") {
         val captured = slot<List<NewAccount>>()
         every { registerAccounts.register(capture(captured)) } returns 0

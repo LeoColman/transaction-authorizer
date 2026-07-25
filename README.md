@@ -120,6 +120,13 @@ Resposta (contrato do desafio):
 }
 ```
 
+O valor de uma transação vai até `9999999999999.99` (13 dígitos inteiros). O limite
+não é arbitrário: o contrato do desafio transporta o valor como **número JSON**, e
+clientes que o desserializam em IEEE-754 double (JavaScript, Python) só fazem
+round-trip exato até 15 dígitos significativos. Com um teto maior, mais de 80% dos
+valores na faixa alta chegariam com o centavo alterado antes de qualquer validação,
+sem erro visível. O saldo pode acumular além disso — a coluna é `NUMERIC(19,2)`.
+
 | Cenário | HTTP | Corpo |
 |---|---|---|
 | Aprovada | 200 | Envelope acima, `status: SUCCEEDED` |

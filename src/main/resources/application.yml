@@ -65,6 +65,12 @@ springdoc:
 
 server:
   shutdown: graceful
+  tomcat:
+    # Requisição legítima tem ~200 bytes e chega instantaneamente. Com o default
+    # de 60s, um cliente que anuncia Content-Length e não envia o corpo prende a
+    # conexão (e a thread bloqueada na leitura) por minutos — slow body barato.
+    connection-timeout: 10s
+    keep-alive-timeout: 15s
 
 ---
 # Perfil "local": desenvolvimento com LocalStack (docker compose ativa json,local).
