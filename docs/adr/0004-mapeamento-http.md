@@ -16,6 +16,7 @@ do cliente nem do servidor, e o cliente precisa distinguir recusa de falha.
 |---|---|---|
 | Aprovada (`SUCCEEDED`) | 200 | Envelope do desafio |
 | Recusada por saldo (`FAILED`) | 422 | Envelope do desafio, saldo intacto |
+| Crédito que excederia o teto de saldo (`FAILED`) | 422 | Envelope do desafio, saldo intacto |
 | Conta inexistente | 404 | Problem Details (RFC 9457) |
 | Conta desabilitada | 422 | Problem Details |
 | Moeda não suportada | 422 | Problem Details |
@@ -53,6 +54,15 @@ da arquitetura proposta.
   não há como anunciar `Connection: close` — a requisição seguinte do cliente se
   perderia em silêncio. Descartar alguns KB extras custa menos, e esse corpo nunca
   chega à memória da aplicação.
+- **Toda recusa vem do UPDATE condicional, e nenhuma vira 5xx.** O débito é
+  condicionado ao piso zero e o crédito ao teto da faixa suportada
+  (`NUMERIC(19,2)`, 17 dígitos inteiros). Sem a condição no crédito, um saldo
+  perto de 10^17 faria o Postgres responder `numeric field overflow` e a
+  requisição viraria 500; pior, como o rollback não grava nada, a retentativa com
+  o mesmo `transactionId` estouraria para sempre, sem nunca alcançar estado
+  terminal. Zero linhas afetadas é resultado de negócio (`FAILED` gravado, 422,
+  saldo intacto), então a retentativa replica o resultado em vez de repetir a
+  falha.
 - **503 separa saturação de defeito**: esgotamento de pool e timeout de consulta são
   transitórios e ocorrem antes de qualquer escrita, então a retentativa é segura e o
   cliente é informado disso (`Retry-After`). Respondê-los como 500 misturaria falta de

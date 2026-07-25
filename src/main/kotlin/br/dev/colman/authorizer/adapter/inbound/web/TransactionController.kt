@@ -54,8 +54,9 @@ class TransactionController(
         ),
         ApiResponse(
             responseCode = "422",
-            description = "Transação RECUSADA por saldo insuficiente (envelope completo, status FAILED); " +
-                "conta desabilitada ou moeda não suportada respondem Problem Details (RFC 9457)",
+            description = "Transação RECUSADA por saldo insuficiente, ou por crédito que excederia o teto " +
+                "de saldo da conta (envelope completo, status FAILED); conta desabilitada ou moeda não " +
+                "suportada respondem Problem Details (RFC 9457)",
             headers = [Header(name = REPLAY_HEADER, description = REPLAY_HEADER_DESC, schema = Schema(type = "string"))],
             content = [
                 Content(mediaType = "application/json", schema = Schema(implementation = TransactionResponse::class)),

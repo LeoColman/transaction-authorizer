@@ -1,8 +1,8 @@
 # Transaction Authorizer
 
 ![Cobertura total](https://img.shields.io/badge/cobertura%20total-97.5%25-brightgreen)
-![Cobertura unitários](https://img.shields.io/badge/testes%20unit%C3%A1rios-63.1%25-yellow)
-![Cobertura integração](https://img.shields.io/badge/testes%20de%20integra%C3%A7%C3%A3o-92.6%25-brightgreen)
+![Cobertura unitários](https://img.shields.io/badge/testes%20unit%C3%A1rios-62.8%25-yellow)
+![Cobertura integração](https://img.shields.io/badge/testes%20de%20integra%C3%A7%C3%A3o-92.9%25-brightgreen)
 ![Fumaça](https://img.shields.io/badge/fuma%C3%A7a-15%2F15%20cen%C3%A1rios-brightgreen)
 ![Mutantes mortos](https://img.shields.io/badge/mutantes%20mortos-97%25-brightgreen)
 
@@ -125,14 +125,16 @@ não é arbitrário: o contrato do desafio transporta o valor como **número JSO
 clientes que o desserializam em IEEE-754 double (JavaScript, Python) só fazem
 round-trip exato até 15 dígitos significativos. Com um teto maior, mais de 80% dos
 valores na faixa alta chegariam com o centavo alterado antes de qualquer validação,
-sem erro visível. O saldo pode acumular além disso — a coluna é `NUMERIC(19,2)`.
+sem erro visível. O saldo pode acumular além disso — a coluna é `NUMERIC(19,2)`, e um crédito que
+levaria o saldo acima dessa faixa é recusado como resultado de negócio (422), não
+como erro de servidor.
 O campo também aceita o valor como string JSON (`"value": "97.07"`), forma que não
 passa por `double` em cliente nenhum e preserva a precisão integralmente.
 
 | Cenário | HTTP | Corpo |
 |---|---|---|
 | Aprovada | 200 | Envelope acima, `status: SUCCEEDED` |
-| Recusada (saldo insuficiente) | 422 | Envelope acima, `status: FAILED`, saldo intacto |
+| Recusada (saldo insuficiente, ou crédito acima do teto de saldo) | 422 | Envelope acima, `status: FAILED`, saldo intacto |
 | Conta inexistente | 404 | Problem Details (RFC 9457) |
 | Conta desabilitada / moeda não suportada | 422 | Problem Details |
 | Mesmo `transactionId` com payload divergente | 409 | Problem Details (conflito de idempotência) |
@@ -176,8 +178,8 @@ Racional do mapeamento em [ADR-0004](docs/adr/0004-mapeamento-http.md).
 
 | Suíte | Cobertura de linhas | O que exercita |
 |---|---|---|
-| Unitários | 63,1% | Domínio, aplicação e mapeamento de DTOs — isolados com MockK |
-| Integração | 92,6% | Tudo acima + adaptadores reais: repositórios Postgres, controller, listener SQS |
+| Unitários | 62,8% | Domínio, aplicação e mapeamento de DTOs — isolados com MockK |
+| Integração | 92,9% | Tudo acima + adaptadores reais: repositórios Postgres, controller, listener SQS |
 | **Total (unit + integração)** | **97,5%** | Gate de 80% no build (`koverVerify`) |
 
 A leitura correta dos números: na arquitetura hexagonal, adaptadores (SQL, HTTP,
@@ -185,7 +187,7 @@ fila) são deliberadamente testados contra infraestrutura real na camada de
 integração, não com mocks na unitária. Por isso a suíte unitária cobre o núcleo de
 negócio e a de integração completa os adaptadores. Medida apenas contra os pacotes
 que são responsabilidade dela (domínio, aplicação, DTOs e listener — o mesmo escopo
-do Pitest), a suíte unitária cobre **98,6%**; os 63,1% acima incluem os adaptadores
+do Pitest), a suíte unitária cobre **98,6%**; os 62,8% acima incluem os adaptadores
 JDBC e web, que por decisão pertencem à integração. Fumaça e carga não medem
 cobertura: a aplicação roda em container separado (JVM externa ao agente).
 
@@ -199,10 +201,12 @@ cobertura: a aplicação roda em container separado (JVM externa ao agente).
 Relatório em `build/reports/kover/html/index.html`. Excluídos da medição: classe de
 bootstrap e pacote `config` (wiring sem lógica), source sets de teste.
 
-O 0,3% restante (1 linha, 3 branches) é o guard de moeda cruzada em `Money` e no
-replay de `AuthorizationService`: com uma única moeda no enum (ADR-0003) é
-impossível construir o caso que o dispara. Fica como proteção para a evolução
-multi-moeda, mesma razão dos 2 sobreviventes de mutação abaixo.
+As 10 linhas restantes são inalcançáveis de propósito, não lacunas de teste: o
+guard de moeda cruzada em `Money` e no replay de `AuthorizationService` (com uma
+única moeda no enum não há como dispará-lo, ADR-0003, mesma razão dos 2
+sobreviventes de mutação abaixo) e os métodos de I/O assíncrona dos wrappers de
+stream dos filtros (`isReady`, `setReadListener`, `setWriteListener`), que a API
+Servlet obriga a implementar e o MVC bloqueante nunca chama.
 
 ### Testes de mutação (Pitest)
 

@@ -54,10 +54,24 @@ class AccountJdbcRepository(
         .optional()
         .orElse(null)
 
+    // Simétrico ao débito: a condição no WHERE é o que mantém o saldo dentro da
+    // faixa da coluna. Sem ela, um saldo perto de 10^17 faz o Postgres responder
+    // "numeric field overflow" (SQLState 22003), que vira 500 — e como nada é
+    // gravado, a retentativa com o mesmo transactionId estoura para sempre, sem
+    // nunca alcançar estado terminal. A soma no WHERE é numeric de precisão
+    // arbitrária (só o armazenamento na coluna é que tem teto), então avaliar a
+    // condição nunca estoura.
     override fun applyCredit(accountId: UUID, amount: BigDecimal): BigDecimal? = jdbc
-        .sql("UPDATE accounts SET balance = balance + :amount WHERE id = :id RETURNING balance")
+        .sql(
+            """
+            UPDATE accounts SET balance = balance + :amount
+            WHERE id = :id AND balance + :amount <= :max
+            RETURNING balance
+            """.trimIndent(),
+        )
         .param("amount", amount)
         .param("id", accountId)
+        .param("max", Money.MAX)
         .query(BigDecimal::class.java)
         .optional()
         .orElse(null)

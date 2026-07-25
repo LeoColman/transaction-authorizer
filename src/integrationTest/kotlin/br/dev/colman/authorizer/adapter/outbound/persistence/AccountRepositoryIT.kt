@@ -58,6 +58,20 @@ class AccountRepositoryIT(
             accounts.applyCredit(account.id, BigDecimal("0.50"))!! shouldBeEqualComparingTo BigDecimal("11.00")
         }
 
+        test("crédito condicional nunca estoura o teto da coluna") {
+            val account = newAccount()
+            accounts.insertAll(listOf(account))
+            accounts.applyCredit(account.id, BigDecimal("99999999999999990.00"))
+
+            // Sem a condição de teto, o Postgres responderia "numeric field
+            // overflow" (SQLState 22003) e a requisição viraria 500.
+            accounts.applyCredit(account.id, BigDecimal("10.00")).shouldBeNull()
+            accounts.currentBalance(account.id)!! shouldBeEqualComparingTo BigDecimal("99999999999999990.00")
+
+            // O último centavo que ainda cabe é aceito: o teto é inclusivo.
+            accounts.applyCredit(account.id, BigDecimal("9.99"))!! shouldBeEqualComparingTo Money.MAX
+        }
+
         test("débito condicional nunca deixa saldo negativo") {
             val account = newAccount()
             accounts.insertAll(listOf(account))

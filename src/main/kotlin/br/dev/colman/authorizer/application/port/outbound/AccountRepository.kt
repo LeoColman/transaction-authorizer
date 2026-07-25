@@ -16,9 +16,10 @@ interface AccountRepository {
     fun findById(id: UUID): Account?
 
     /**
-     * Soma [amount] ao saldo de forma atômica.
+     * Soma [amount] ao saldo de forma atômica, somente se o saldo resultante
+     * couber na faixa suportada (`Money.MAX`), como o débito faz com o piso zero.
      *
-     * @return novo saldo, ou null se a conta não existe.
+     * @return novo saldo, ou null se a conta não existe ou o teto seria excedido.
      */
     fun applyCredit(accountId: UUID, amount: BigDecimal): BigDecimal?
 

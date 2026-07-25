@@ -96,6 +96,21 @@ class AuthorizationExecutorSpec : FunSpec({
         saved.captured.status shouldBe TransactionStatus.FAILED
     }
 
+    test("crédito recusado por estourar o teto de saldo grava FAILED sem alterar saldo") {
+        every { accounts.findById(accountId) } returns account(balance = "99999999999999995.00")
+        every { accounts.applyCredit(accountId, BigDecimal("10.00")) } returns null
+        every { accounts.currentBalance(accountId) } returns BigDecimal("99999999999999995.00")
+
+        val result = executor.execute(command(TransactionType.CREDIT))
+
+        result.status shouldBe TransactionStatus.FAILED
+        result.balanceAfter shouldBe Money.brl(BigDecimal("99999999999999995.00"))
+
+        val saved = slot<Transaction>()
+        verify(exactly = 1) { transactions.insert(capture(saved)) }
+        saved.captured.status shouldBe TransactionStatus.FAILED
+    }
+
     test("débito do valor exato do saldo é aprovado e zera a conta (corner case)") {
         every { accounts.findById(accountId) } returns account(balance = "40.00")
         every { accounts.applyDebit(accountId, BigDecimal("40.00")) } returns BigDecimal("0.00")

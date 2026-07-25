@@ -90,6 +90,26 @@ class AuthorizationFlowIT(
             accounts.currentBalance(accountId)!! shouldBeEqualComparingTo BigDecimal("30.00")
         }
 
+        test("crédito que estouraria o teto de saldo é recusado com 422, não com 500") {
+            val accountId = createAccount()
+            // Saldo a um passo do teto da coluna, semeado direto no repositório:
+            // pelo HTTP levaria 10 mil requisições no valor máximo permitido.
+            accounts.applyCredit(accountId, BigDecimal("99999999999999000.00"))
+            val transactionId = UUID.randomUUID()
+
+            val response = post(transactionId, body(accountId, "CREDIT", "9999999999999.99"))
+
+            response.statusCode shouldBe HttpStatus.UNPROCESSABLE_CONTENT
+            response.body!! shouldContain """"status":"FAILED""""
+            accounts.currentBalance(accountId)!! shouldBeEqualComparingTo BigDecimal("99999999999999000.00")
+
+            // Estado terminal de verdade: a retentativa replica o resultado
+            // gravado em vez de estourar de novo contra o banco.
+            val replay = post(transactionId, body(accountId, "CREDIT", "9999999999999.99"))
+            replay.statusCode shouldBe HttpStatus.UNPROCESSABLE_CONTENT
+            replay.headers.getFirst("X-Idempotent-Replay") shouldBe "true"
+        }
+
         test("débito do valor exato do saldo zera a conta") {
             val accountId = createAccount()
             post(UUID.randomUUID(), body(accountId, "CREDIT", "30.00"))

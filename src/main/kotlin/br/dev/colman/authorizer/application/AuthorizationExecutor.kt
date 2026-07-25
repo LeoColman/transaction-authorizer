@@ -21,8 +21,9 @@ import java.util.UUID
  * alteração de saldo e registro do resultado são atômicos.
  *
  * Concorrência (ADR-0002):
- * - O saldo é alterado por UPDATE condicional atômico; nunca há lost update
- *   nem saldo negativo, mesmo com N instâncias concorrentes.
+ * - O saldo é alterado por UPDATE condicional atômico; nunca há lost update,
+ *   saldo negativo nem saldo fora da faixa suportada, mesmo com N instâncias
+ *   concorrentes. Zero linhas afetadas é recusa de negócio, não falha.
  * - Se duas requisições com o mesmo transactionId passarem juntas pelo
  *   fast-path de replay, a segunda viola a PK de transactions ao inserir e a
  *   transação de banco inteira sofre rollback, desfazendo a dupla aplicação
@@ -47,8 +48,9 @@ class AuthorizationExecutor(
         val transaction = if (newBalance != null) {
             authorized(command, TransactionStatus.SUCCEEDED, Money(newBalance, command.amount.currency))
         } else {
-            // Débito recusado por saldo insuficiente: relê o saldo para responder o
-            // valor mais recente (a leitura inicial pode ter ficado defasada).
+            // Recusado pelo UPDATE condicional (débito sem saldo, ou crédito que
+            // excederia o teto de saldo): relê o saldo para responder o valor mais
+            // recente (a leitura inicial pode ter ficado defasada).
             val balance = accounts.currentBalance(account.id)
                 ?: throw AccountNotFoundException(account.id)
             authorized(command, TransactionStatus.FAILED, Money(balance, command.amount.currency))
