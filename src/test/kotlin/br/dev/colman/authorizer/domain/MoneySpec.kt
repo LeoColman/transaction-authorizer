@@ -22,6 +22,13 @@ class MoneySpec : FunSpec({
         shouldThrow<IllegalArgumentException> { Money.brl(BigDecimal("0.001")) }
     }
 
+    test("aceita o teto e rejeita acima dele sem materializar valores absurdos") {
+        Money.brl(Money.MAX).value shouldBe Money.MAX
+        shouldThrow<IllegalArgumentException> { Money.brl(BigDecimal("100000000000000000.00")) }
+        // Notação exponencial com escala absurda não pode estourar (compareTo é seguro).
+        shouldThrow<IllegalArgumentException> { Money.brl(BigDecimal("1e2147483647")) }
+    }
+
     test("soma e subtração preservam a moeda e a escala") {
         val a = Money.brl(BigDecimal("10.10"))
         val b = Money.brl(BigDecimal("0.90"))

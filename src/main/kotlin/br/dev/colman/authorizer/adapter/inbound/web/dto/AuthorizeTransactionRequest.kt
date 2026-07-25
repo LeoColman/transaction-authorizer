@@ -6,6 +6,7 @@ import br.dev.colman.authorizer.domain.Money
 import br.dev.colman.authorizer.domain.TransactionType
 import br.dev.colman.authorizer.domain.UnsupportedCurrencyException
 import jakarta.validation.Valid
+import jakarta.validation.constraints.DecimalMax
 import jakarta.validation.constraints.DecimalMin
 import jakarta.validation.constraints.Digits
 import jakarta.validation.constraints.NotNull
@@ -39,8 +40,12 @@ data class AuthorizeTransactionRequest(
 }
 
 data class AmountRequest(
+    // DecimalMax compara por valor (compareTo, à prova de overflow) e barra
+    // notação exponencial com escala absurda que passaria pelo @Digits (cujo
+    // cálculo precision - scale estoura int) e quebraria a normalização.
     @field:NotNull(message = "amount.value é obrigatório")
     @field:DecimalMin(value = "0.01", message = "amount.value deve ser no mínimo 0.01")
+    @field:DecimalMax(value = "99999999999999999.99", message = "amount.value excede o valor máximo suportado")
     @field:Digits(integer = 15, fraction = 2, message = "amount.value deve ter no máximo 15 dígitos inteiros e 2 casas decimais")
     val value: BigDecimal?,
 

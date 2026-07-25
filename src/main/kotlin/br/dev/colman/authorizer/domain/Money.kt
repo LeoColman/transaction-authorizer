@@ -22,6 +22,12 @@ data class Money(val value: BigDecimal, val currency: Currency) {
         require(value.scale() <= SCALE) {
             "Valor monetário não pode ter mais de $SCALE casas decimais: $value"
         }
+        // Guard de magnitude: acima do teto do NUMERIC(19,2), normalizar (setScale)
+        // lançaria ArithmeticException. compareTo é à prova de overflow de escala,
+        // então nunca materializa um valor gigante em notação exponencial.
+        require(value.abs() <= MAX) {
+            "Valor monetário excede o máximo suportado"
+        }
     }
 
     val normalized: BigDecimal
@@ -49,6 +55,9 @@ data class Money(val value: BigDecimal, val currency: Currency) {
 
     companion object {
         const val SCALE = 2
+
+        /** Teto da coluna NUMERIC(19,2): 17 dígitos inteiros e 2 decimais. */
+        val MAX: BigDecimal = BigDecimal("99999999999999999.99")
 
         fun brl(value: BigDecimal): Money = Money(value, Currency.BRL)
 

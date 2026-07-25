@@ -239,6 +239,28 @@ class AuthorizationFlowIT(
                 .toEntity(String::class.java).statusCode shouldBe HttpStatus.NOT_ACCEPTABLE
         }
 
+        test("valor em notação exponencial com escala absurda responde 400, não 500") {
+            val accountId = createAccount()
+
+            val response = post(UUID.randomUUID(), body(accountId, "CREDIT", "1e2147483647"))
+
+            response.statusCode shouldBe HttpStatus.BAD_REQUEST
+            accounts.currentBalance(accountId)!! shouldBeEqualComparingTo BigDecimal.ZERO
+        }
+
+        test("PUT com corpo grande é barrado com 413 antes de qualquer filtro de form ler o corpo") {
+            val huge = "campo=" + "X".repeat(100_000)
+
+            val response = client.put().uri("/transactions/${UUID.randomUUID()}")
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .body(huge)
+                .retrieve()
+                .toEntity(String::class.java)
+
+            response.statusCode shouldBe HttpStatus.CONTENT_TOO_LARGE
+            response.body!! shouldContain "payload-too-large"
+        }
+
         test("form-urlencoded e multipart são rejeitados com 415 (só JSON é consumido)") {
             val accountId = createAccount()
 

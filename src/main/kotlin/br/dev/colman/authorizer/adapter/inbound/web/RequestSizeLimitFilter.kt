@@ -7,6 +7,8 @@ import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletRequestWrapper
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.core.Ordered
+import org.springframework.core.annotation.Order
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
 import org.springframework.web.filter.OncePerRequestFilter
@@ -14,12 +16,18 @@ import java.io.IOException
 
 /**
  * Defesa em profundidade contra corpos arbitrariamente grandes: o API Gateway
- * da arquitetura proposta é a primeira barreira, mas o serviço não depende
- * dele. Content-Length acima do teto responde 413 sem ler o corpo; corpo
- * chunked (sem Content-Length) é limitado durante a leitura e o estouro vira
- * 400 de corpo malformado. O maior payload legítimo da API tem ~200 bytes.
+ * da arquitetura proposta é a primeira barreira, mas o serviço não depende dele.
+ *
+ * HIGHEST_PRECEDENCE: precisa rodar ANTES de qualquer filtro do framework que
+ * leia o corpo (em especial o OrderedFormContentFilter do Boot, ordem -9900, que
+ * drena corpo form-urlencoded de PUT/PATCH/DELETE). Content-Length acima do teto
+ * responde 413 sem ler o corpo; corpo chunked é limitado durante a leitura,
+ * onde quer que aconteça — se o estouro escapar como IOException até este filtro
+ * (ex.: parse de form), vira 413; se o converter Jackson o embrulhar
+ * (corpo JSON), o handler devolve 400. O maior payload legítimo tem ~200 bytes.
  */
 @Component
+@Order(Ordered.HIGHEST_PRECEDENCE)
 class RequestSizeLimitFilter(
     @Value("\${authorizer.http.max-request-bytes:16384}") private val maxBytes: Long,
 ) : OncePerRequestFilter() {
@@ -29,10 +37,16 @@ class RequestSizeLimitFilter(
             reject(request, response)
             return
         }
-        chain.doFilter(LimitedRequest(request, maxBytes), response)
+        try {
+            chain.doFilter(LimitedRequest(request, maxBytes), response)
+        } catch (@Suppress("SwallowedException") e: RequestBodyTooLargeException) {
+            if (response.isCommitted) throw e
+            reject(request, response)
+        }
     }
 
     private fun reject(request: HttpServletRequest, response: HttpServletResponse) {
+        response.reset()
         response.status = HttpStatus.CONTENT_TOO_LARGE.value()
         response.contentType = "application/problem+json"
         response.characterEncoding = "UTF-8"
@@ -45,6 +59,9 @@ class RequestSizeLimitFilter(
                 """"instance":"${request.requestURI}"}""",
         )
     }
+
+    /** Corpo excedeu o limite durante a leitura (não há Content-Length confiável). */
+    private class RequestBodyTooLargeException(message: String) : IOException(message)
 
     private class LimitedRequest(request: HttpServletRequest, private val maxBytes: Long) :
         HttpServletRequestWrapper(request) {
@@ -66,7 +83,7 @@ class RequestSizeLimitFilter(
         private fun tally(bytes: Int) {
             count += bytes
             if (count > maxBytes) {
-                throw IOException("Corpo da requisição excede o limite de $maxBytes bytes")
+                throw RequestBodyTooLargeException("Corpo da requisição excede o limite de $maxBytes bytes")
             }
         }
 
