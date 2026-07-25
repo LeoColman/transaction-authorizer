@@ -29,14 +29,14 @@ concorrentes; a condição `balance >= :v` garante a invariante sem leitura pré
 
 ### Idempotência
 
-`transactions.id` (o `transactionId` do path) é PRIMARY KEY. O fluxo, em uma única
-transação de banco:
+`transactions.id` (o `transactionId` do path) é PRIMARY KEY. O fluxo:
 
-1. Fast-path: se a transação já existe, devolve o resultado gravado (replay).
-2. Aplica o UPDATE de saldo.
-3. INSERT do resultado. Se violar a PK (corrida entre retentativas), a transação de banco
-   inteira sofre rollback, desfazendo a dupla aplicação de saldo, e o serviço devolve o
-   resultado gravado pela requisição vencedora.
+1. Fast-path (leitura avulsa, fora de transação): se a transação já existe, devolve o
+   resultado gravado (replay).
+2. Em uma única transação de banco: UPDATE de saldo e INSERT do resultado. Se o INSERT
+   violar a PK (corrida entre retentativas), a transação inteira sofre rollback,
+   desfazendo a aplicação de saldo, e o serviço devolve o resultado gravado pela
+   requisição vencedora.
 
 Recusas também são gravadas: a decisão de um `transactionId` é imutável, e o replay
 devolve resposta idêntica byte a byte (timestamp truncado em micros, precisão do

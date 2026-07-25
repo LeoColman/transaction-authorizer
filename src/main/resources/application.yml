@@ -5,9 +5,12 @@ spring:
     virtual:
       enabled: true
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/authorizer}
-    username: ${DB_USERNAME:authorizer}
-    password: ${DB_PASSWORD:authorizer}
+    # Sem defaults de conexão aqui: em produção, env var ausente falha o startup
+    # na resolução do placeholder (fail-fast), mesmo princípio da fila SQS.
+    # Defaults de desenvolvimento vivem no perfil "local" (documento abaixo).
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     hikari:
       maximum-pool-size: ${DB_POOL_MAX_SIZE:20}
       minimum-idle: 5
@@ -58,6 +61,12 @@ spring:
   config:
     activate:
       on-profile: local
+  datasource:
+    # Postgres do docker-compose é exposto no host em 5433 (evita conflito com
+    # um Postgres local em 5432); dentro do compose a env DB_URL prevalece.
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/authorizer}
+    username: ${DB_USERNAME:authorizer}
+    password: ${DB_PASSWORD:authorizer}
   cloud:
     aws:
       endpoint: ${AWS_ENDPOINT_URL:http://localhost:4566}

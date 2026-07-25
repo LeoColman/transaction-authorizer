@@ -33,6 +33,10 @@ class AccountJdbcRepository(
                 .addValue("createdAt", OffsetDateTime.ofInstant(account.createdAt, ZoneOffset.UTC))
         }.toTypedArray()
 
+        // A contagem por linha depende do modo padrão do driver: com
+        // reWriteBatchedInserts=true o pgjdbc devolve SUCCESS_NO_INFO (-2) por
+        // entrada e esta soma (e as métricas registered/duplicated) quebraria.
+        // Não habilite essa flag na DB_URL sem revisar este método.
         return namedJdbc.batchUpdate(
             """
             INSERT INTO accounts (id, owner_id, status, balance, currency, created_at)
