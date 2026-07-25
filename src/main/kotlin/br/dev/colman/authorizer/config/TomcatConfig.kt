@@ -13,9 +13,11 @@ import org.springframework.context.annotation.Configuration
 class TomcatConfig {
 
     /**
-     * Rejeições no nível do conector (path/header malformados, antes do
-     * DispatcherServlet) respondem sem a página HTML padrão do Tomcat e sem
-     * identificação do servidor: só o status HTTP, sem fingerprinting.
+     * Última linha de defesa na renderização de erros do host: se algum erro
+     * chegar à ErrorReportValve (ex.: falha no próprio dispatch de /error), a
+     * resposta sai sem página HTML e sem identificação de servidor. Rejeições
+     * de parse no nível do conector NÃO passam por valve alguma e respondem a
+     * página mínima do Tomcat, sem versão de servidor (ver ADR-0004).
      */
     @Bean
     fun errorReportValveCustomizer(): WebServerFactoryCustomizer<TomcatServletWebServerFactory> =

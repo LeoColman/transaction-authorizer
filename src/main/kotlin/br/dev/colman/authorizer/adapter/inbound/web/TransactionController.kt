@@ -47,6 +47,10 @@ class TransactionController(
             responseCode = "422",
             description = "Transação RECUSADA por saldo insuficiente (envelope completo, status FAILED); " +
                 "conta desabilitada ou moeda não suportada respondem Problem Details (RFC 9457)",
+            content = [
+                Content(mediaType = "application/json", schema = Schema(implementation = TransactionResponse::class)),
+                Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class)),
+            ],
         ),
         ApiResponse(
             responseCode = "404",
