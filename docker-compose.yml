@@ -97,6 +97,10 @@ services:
     # contra a RAM do host inteiro; o limite torna o cálculo previsível e reproduz
     # localmente o que a task definition faria em produção.
     mem_limit: 2g
+    # Sem isto o Docker libera swap de 2x o limite, e um estouro de memória vira
+    # thrashing silencioso em vez do kill imediato que aconteceria no Fargate,
+    # que não tem swap. Igualar os dois desliga o swap e preserva o fail-fast.
+    memswap_limit: 2g
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
       interval: 10s

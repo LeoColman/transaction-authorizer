@@ -315,6 +315,31 @@ class AuthorizationFlowIT(
             accounts.currentBalance(accountId)!! shouldBeEqualComparingTo BigDecimal.ZERO
         }
 
+        test("HEAD declara enquadramento e não deixa o cliente esperando o fim da resposta") {
+            // Sem Content-Length nem Transfer-Encoding, um cliente keep-alive fica
+            // bloqueado até o servidor fechar a conexão.
+            val response = client.method(org.springframework.http.HttpMethod.HEAD)
+                .uri("/actuator/health")
+                .retrieve()
+                .toBodilessEntity()
+
+            response.headers.contentLength shouldBe 0L
+        }
+
+        test("valor como string JSON é aceito e preserva a precisão") {
+            val accountId = createAccount()
+
+            val response = client.post().uri("/transactions/${UUID.randomUUID()}")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body("""{"accountId":"$accountId","type":"CREDIT","amount":{"value":"97.07","currency":"BRL"}}""")
+                .retrieve()
+                .toEntity(String::class.java)
+
+            response.statusCode shouldBe HttpStatus.OK
+            response.body!! shouldContain """"value":97.07"""
+            accounts.currentBalance(accountId)!! shouldBeEqualComparingTo BigDecimal("97.07")
+        }
+
         test("exceções do framework preservam o status HTTP nativo (405, 404, 415)") {
             client.get().uri("/transactions/${UUID.randomUUID()}").retrieve()
                 .toEntity(String::class.java).statusCode shouldBe HttpStatus.METHOD_NOT_ALLOWED

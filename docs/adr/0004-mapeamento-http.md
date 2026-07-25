@@ -34,7 +34,10 @@ host é substituída por uma sem corpo (nenhuma página HTML nem versão de serv
 e falhas de parse no próprio conector (ex.: `%00` no path) respondem a página
 mínima do Tomcat, que não passa por valve alguma mas também não identifica versão
 de servidor. O 408 é contido por `server.tomcat.connection-timeout` (10s), para
-que um corpo que nunca chega não prenda conexão e thread por minutos.
+que um corpo que nunca chega não prenda conexão e thread por minutos. É um teto de
+inatividade, não de duração total: um cliente que envia bytes devagar mantém a
+conexão aberta, e limitar isso (taxa mínima, duração máxima) cabe ao API Gateway
+da arquitetura proposta.
 
 - Recusa usa **422 com o envelope completo** (não Problem Details): o resultado é
   distinguível tanto pelo status HTTP (clientes/gateways não retentam 4xx) quanto pelo

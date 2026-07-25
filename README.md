@@ -126,6 +126,8 @@ clientes que o desserializam em IEEE-754 double (JavaScript, Python) só fazem
 round-trip exato até 15 dígitos significativos. Com um teto maior, mais de 80% dos
 valores na faixa alta chegariam com o centavo alterado antes de qualquer validação,
 sem erro visível. O saldo pode acumular além disso — a coluna é `NUMERIC(19,2)`.
+O campo também aceita o valor como string JSON (`"value": "97.07"`), forma que não
+passa por `double` em cliente nenhum e preserva a precisão integralmente.
 
 | Cenário | HTTP | Corpo |
 |---|---|---|

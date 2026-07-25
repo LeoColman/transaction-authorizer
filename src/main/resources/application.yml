@@ -69,6 +69,10 @@ server:
     # Requisição legítima tem ~200 bytes e chega instantaneamente. Com o default
     # de 60s, um cliente que anuncia Content-Length e não envia o corpo prende a
     # conexão (e a thread bloqueada na leitura) por minutos — slow body barato.
+    # São timeouts de INATIVIDADE: um cliente que envia bytes lentamente mantém a
+    # conexão viva. Limitar a duração total ou exigir taxa mínima é papel do
+    # API Gateway/ALB da arquitetura proposta; aqui as threads virtuais tornam
+    # uma conexão parada barata (medido: 150 conexões em trickle sem impacto).
     connection-timeout: 10s
     keep-alive-timeout: 15s
 
