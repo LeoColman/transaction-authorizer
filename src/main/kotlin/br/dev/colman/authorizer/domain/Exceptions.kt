@@ -16,9 +16,13 @@ class AccountDisabledException(val accountId: UUID) :
 class DuplicateTransactionException(val transactionId: UUID, cause: Throwable? = null) :
     DomainException("Transação já autorizada: $transactionId", cause)
 
-/** Moeda não suportada pelo autorizador (ADR-0003: somente BRL). */
+/**
+ * Moeda não suportada pelo autorizador (ADR-0003: somente BRL).
+ * A mensagem trunca o código recebido: ela é refletida na resposta HTTP e não
+ * pode servir de amplificador para payloads arbitrariamente grandes.
+ */
 class UnsupportedCurrencyException(val currencyCode: String) :
-    DomainException("Moeda não suportada: $currencyCode")
+    DomainException("Moeda não suportada: ${currencyCode.take(10)}")
 
 /**
  * Retentativa com o mesmo transactionId mas payload divergente do original:

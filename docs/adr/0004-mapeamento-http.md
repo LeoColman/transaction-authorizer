@@ -23,6 +23,13 @@ do cliente nem do servidor, e o cliente precisa distinguir recusa de falha.
 | Payload inválido | 400 | Problem Details |
 | Método/rota/content-type inválidos | 405/404/415 | Problem Details do framework |
 
+Exceção conhecida: requisições rejeitadas antes do DispatcherServlet não passam pelo
+MVC e não respondem Problem Details. TRACE bloqueado responde o formato de erro
+padrão do Boot; a valve de erro do host é substituída por uma sem corpo (nenhuma
+página HTML nem versão de servidor); e falhas de parse no próprio conector (ex.:
+`%00` no path) respondem a página mínima do Tomcat, que não passa por valve alguma
+mas também não identifica versão de servidor.
+
 - Recusa usa **422 com o envelope completo** (não Problem Details): o resultado é
   distinguível tanto pelo status HTTP (clientes/gateways não retentam 4xx) quanto pelo
   campo `status` (clientes que só olham o corpo).

@@ -7,6 +7,7 @@ import br.dev.colman.authorizer.domain.Money
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.comparables.shouldBeEqualComparingTo
+import io.kotest.matchers.ints.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import org.springframework.boot.test.context.SpringBootTest
@@ -160,6 +161,16 @@ class AuthorizationFlowIT(
             post(UUID.randomUUID(), body(accountId, "CREDIT", "-5.00")).statusCode shouldBe HttpStatus.BAD_REQUEST
             post(UUID.randomUUID(), body(accountId, "CREDIT", "1.005")).statusCode shouldBe HttpStatus.BAD_REQUEST
             post(UUID.randomUUID(), body(accountId, "PIX", "10.00")).statusCode shouldBe HttpStatus.BAD_REQUEST
+        }
+
+        test("moeda com tamanho fora do ISO 4217 responde 400 sem refletir o valor") {
+            val accountId = createAccount()
+            val huge = "X".repeat(100_000)
+
+            val response = post(UUID.randomUUID(), body(accountId, "CREDIT", "10.00", currency = huge))
+
+            response.statusCode shouldBe HttpStatus.BAD_REQUEST
+            response.body!!.length shouldBeLessThan 2_000
         }
 
         test("transactionId que não é UUID responde 400") {

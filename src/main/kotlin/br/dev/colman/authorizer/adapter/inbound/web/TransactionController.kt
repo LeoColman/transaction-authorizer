@@ -5,12 +5,15 @@ import br.dev.colman.authorizer.adapter.inbound.web.dto.TransactionResponse
 import br.dev.colman.authorizer.application.port.inbound.AuthorizeTransactionUseCase
 import io.micrometer.core.instrument.MeterRegistry
 import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.media.Content
+import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
+import org.springframework.http.ProblemDetail
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -29,6 +32,10 @@ class TransactionController(
 
     private val log = LoggerFactory.getLogger(javaClass)
 
+    private companion object {
+        const val PROBLEM_JSON = "application/problem+json"
+    }
+
     @Operation(
         summary = "Autoriza uma transação de crédito ou débito",
         description = "Idempotente por transactionId: retentativas com o mesmo id recebem o resultado " +
@@ -38,11 +45,24 @@ class TransactionController(
         ApiResponse(responseCode = "200", description = "Transação APROVADA (status SUCCEEDED)"),
         ApiResponse(
             responseCode = "422",
-            description = "Transação RECUSADA (status FAILED, ex.: saldo insuficiente), conta desabilitada ou moeda não suportada",
+            description = "Transação RECUSADA por saldo insuficiente (envelope completo, status FAILED); " +
+                "conta desabilitada ou moeda não suportada respondem Problem Details (RFC 9457)",
         ),
-        ApiResponse(responseCode = "404", description = "Conta não encontrada"),
-        ApiResponse(responseCode = "409", description = "Mesmo transactionId com payload divergente do original"),
-        ApiResponse(responseCode = "400", description = "Payload inválido"),
+        ApiResponse(
+            responseCode = "404",
+            description = "Conta não encontrada",
+            content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
+        ),
+        ApiResponse(
+            responseCode = "409",
+            description = "Mesmo transactionId com payload divergente do original",
+            content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
+        ),
+        ApiResponse(
+            responseCode = "400",
+            description = "Payload inválido",
+            content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
+        ),
     )
     @PostMapping("/transactions/{transactionId}")
     fun authorize(

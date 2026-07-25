@@ -5,9 +5,11 @@ spring:
     virtual:
       enabled: true
   datasource:
-    # Sem defaults de conexão aqui: em produção, env var ausente falha o startup
-    # na resolução do placeholder (fail-fast), mesmo princípio da fila SQS.
-    # Defaults de desenvolvimento vivem no perfil "local" (documento abaixo).
+    # Sem defaults de conexão aqui: com env var ausente a aplicação não sobe.
+    # (Mecanismo: o Spring não falha placeholder não resolvido; o literal
+    # "${DB_URL}" é rejeitado pelo pool por não começar com "jdbc:" e uma
+    # credencial literal falha autenticação no banco. Efeito fail-fast igual
+    # ao da fila SQS.) Defaults de desenvolvimento: perfil "local" abaixo.
     url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}

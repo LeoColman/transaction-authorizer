@@ -9,6 +9,7 @@ import jakarta.validation.Valid
 import jakarta.validation.constraints.DecimalMin
 import jakarta.validation.constraints.Digits
 import jakarta.validation.constraints.NotNull
+import jakarta.validation.constraints.Size
 import java.math.BigDecimal
 import java.util.UUID
 
@@ -43,8 +44,10 @@ data class AmountRequest(
     @field:Digits(integer = 15, fraction = 2, message = "amount.value deve ter no máximo 15 dígitos inteiros e 2 casas decimais")
     val value: BigDecimal?,
 
-    // Sem validação de formato aqui: qualquer código fora do enum de moedas
-    // suportadas responde 422 unsupported-currency, nunca 400 genérico.
+    // Só o tamanho é validado aqui (contém o dano de payloads gigantes sem
+    // refletir o valor); qualquer código de 3 caracteres fora do enum de
+    // moedas suportadas responde 422 unsupported-currency, nunca 400 genérico.
     @field:NotNull(message = "amount.currency é obrigatório")
+    @field:Size(min = 3, max = 3, message = "amount.currency deve ter 3 caracteres (ISO 4217)")
     val currency: String?,
 )
