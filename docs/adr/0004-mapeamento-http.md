@@ -25,8 +25,10 @@ do cliente nem do servidor, e o cliente precisa distinguir recusa de falha.
 | Corpo maior que o limite (16 KiB) | 413 | Problem Details (rejeitado ANTES de executar a autorização) |
 | Método/rota/content-type inválidos | 405/404/415 | Problem Details do framework |
 
-Exceção conhecida: requisições rejeitadas antes do DispatcherServlet não passam pelo
-MVC e não respondem Problem Details. TRACE bloqueado responde o formato de erro
+Rejeições antes do controller têm dois níveis. O filtro de tamanho da aplicação
+(`RequestSizeLimitFilter`) roda na cadeia de servlet e responde Problem Details
+próprio (413). Já rejeições no nível do container/conector, que nem chegam ao MVC,
+respondem no formato do Boot/Tomcat: TRACE bloqueado responde o formato de erro
 padrão do Boot; a valve de erro do host é substituída por uma sem corpo (nenhuma
 página HTML nem versão de servidor); e falhas de parse no próprio conector (ex.:
 `%00` no path) respondem a página mínima do Tomcat, que não passa por valve alguma

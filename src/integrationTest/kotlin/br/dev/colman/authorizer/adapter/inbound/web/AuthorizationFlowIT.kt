@@ -239,6 +239,27 @@ class AuthorizationFlowIT(
                 .toEntity(String::class.java).statusCode shouldBe HttpStatus.NOT_ACCEPTABLE
         }
 
+        test("form-urlencoded e multipart são rejeitados com 415 (só JSON é consumido)") {
+            val accountId = createAccount()
+
+            // Corpos pequenos: prova a rejeição pela camada de media-type (consumes
+            // JSON + multipart desabilitado), independente do limite de tamanho.
+            // Fecha o bypass de getParameterMap/getParts, que não passam pelo filtro.
+            client.post().uri("/transactions/${UUID.randomUUID()}")
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .body("accountId=$accountId&type=CREDIT")
+                .retrieve()
+                .toEntity(String::class.java).statusCode shouldBe HttpStatus.UNSUPPORTED_MEDIA_TYPE
+
+            client.post().uri("/transactions/${UUID.randomUUID()}")
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body("--b\r\nContent-Disposition: form-data; name=\"x\"\r\n\r\nv\r\n--b--")
+                .retrieve()
+                .toEntity(String::class.java).statusCode shouldBe HttpStatus.UNSUPPORTED_MEDIA_TYPE
+
+            accounts.currentBalance(accountId)!! shouldBeEqualComparingTo BigDecimal.ZERO
+        }
+
         test("exceções do framework preservam o status HTTP nativo (405, 404, 415)") {
             client.get().uri("/transactions/${UUID.randomUUID()}").retrieve()
                 .toEntity(String::class.java).statusCode shouldBe HttpStatus.METHOD_NOT_ALLOWED

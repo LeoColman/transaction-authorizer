@@ -94,7 +94,16 @@ class TransactionController(
     // o dinheiro se moveria e o chamador receberia erro. Qvalues (ex.: q=0)
     // não participam da decisão do Spring MVC; servir a única representação
     // nesses casos é permitido pela RFC 9110 §12.5.1.
-    @PostMapping("/transactions/{transactionId}", produces = [MediaType.APPLICATION_JSON_VALUE])
+    //
+    // consumes explícito: qualquer Content-Type que não seja JSON (form-urlencoded,
+    // multipart) é rejeitado com 415 no handler mapping, antes de o corpo ser lido
+    // por getParameterMap/getParts — caminhos que escapariam do RequestSizeLimitFilter
+    // (que só limita getInputStream). Multipart é desabilitado em application.yml.
+    @PostMapping(
+        "/transactions/{transactionId}",
+        consumes = [MediaType.APPLICATION_JSON_VALUE],
+        produces = [MediaType.APPLICATION_JSON_VALUE],
+    )
     fun authorize(
         @PathVariable transactionId: UUID,
         @Valid @RequestBody request: AuthorizeTransactionRequest,

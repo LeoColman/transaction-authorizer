@@ -20,6 +20,12 @@ spring:
       validation-timeout: 2000
   jackson:
     default-property-inclusion: non_null
+  servlet:
+    multipart:
+      # A API é JSON-only: sem resolução de multipart, um corpo multipart cai
+      # no 415 do handler mapping sem ser parseado (o parsing multipart do Spring
+      # escaparia do limite de tamanho da aplicação).
+      enabled: false
   cloud:
     aws:
       region:
@@ -30,6 +36,9 @@ spring:
 
 authorizer:
   presentation-timezone: ${PRESENTATION_TIMEZONE:America/Sao_Paulo}
+  http:
+    # Teto de corpo da requisição; o maior payload legítimo tem ~200 bytes.
+    max-request-bytes: ${HTTP_MAX_REQUEST_BYTES:16384}
   sqs:
     account-created-queue: ${ACCOUNT_CREATED_QUEUE:conta-bancaria-criada}
     max-concurrent-messages: ${SQS_MAX_CONCURRENT_MESSAGES:100}

@@ -26,20 +26,23 @@ class RequestSizeLimitFilter(
 
     override fun doFilterInternal(request: HttpServletRequest, response: HttpServletResponse, chain: FilterChain) {
         if (request.contentLengthLong > maxBytes) {
-            reject(response)
+            reject(request, response)
             return
         }
         chain.doFilter(LimitedRequest(request, maxBytes), response)
     }
 
-    private fun reject(response: HttpServletResponse) {
+    private fun reject(request: HttpServletRequest, response: HttpServletResponse) {
         response.status = HttpStatus.CONTENT_TOO_LARGE.value()
         response.contentType = "application/problem+json"
         response.characterEncoding = "UTF-8"
+        // instance com o mesmo padrão dos demais Problem Details da API. A URI
+        // não-decodificada nunca contém aspas/barras cruas, seguro no JSON.
         response.writer.write(
             """{"type":"https://transaction-authorizer/errors/payload-too-large",""" +
                 """"title":"Corpo da requisição muito grande","status":413,""" +
-                """"detail":"Corpo excede o limite de $maxBytes bytes"}""",
+                """"detail":"Corpo excede o limite de $maxBytes bytes",""" +
+                """"instance":"${request.requestURI}"}""",
         )
     }
 
