@@ -24,6 +24,7 @@ do cliente nem do servidor, e o cliente precisa distinguir recusa de falha.
 | `Accept` sem `application/json` | 406 | Problem Details do framework (rejeitado ANTES de executar a autorização) |
 | Corpo maior que o limite (16 KiB) | 413 | Problem Details (rejeitado ANTES de executar a autorização) |
 | Método/rota/content-type inválidos | 405/404/415 | Problem Details do framework |
+| Pool de conexões esgotado / timeout no banco | 503 + `Retry-After` | Problem Details |
 
 Rejeições antes do controller têm dois níveis. O filtro de tamanho da aplicação
 (`RequestSizeLimitFilter`) roda na cadeia de servlet e responde Problem Details
@@ -39,6 +40,10 @@ inatividade, não de duração total: um cliente que envia bytes devagar mantém
 conexão aberta, e limitar isso (taxa mínima, duração máxima) cabe ao API Gateway
 da arquitetura proposta.
 
+- **503 separa saturação de defeito**: esgotamento de pool e timeout de consulta são
+  transitórios e ocorrem antes de qualquer escrita, então a retentativa é segura e o
+  cliente é informado disso (`Retry-After`). Respondê-los como 500 misturaria falta de
+  capacidade com bug de aplicação no mesmo alarme de 5xx.
 - Recusa usa **422 com o envelope completo** (não Problem Details): o resultado é
   distinguível tanto pelo status HTTP (clientes/gateways não retentam 4xx) quanto pelo
   campo `status` (clientes que só olham o corpo).

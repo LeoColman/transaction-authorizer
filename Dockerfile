@@ -23,8 +23,11 @@ COPY --from=build /app/build/libs/*.jar app.jar
 USER app
 EXPOSE 8080
 
-ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError"
+ENV JAVA_OPTS=""
 # Log JSON por padrão em qualquer deploy da imagem; sobrescrevível (compose usa json,local).
 ENV SPRING_PROFILES_ACTIVE="json"
 
-ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar"]
+# As flags de memória ficam FIXAS aqui, não em JAVA_OPTS: uma task definition que
+# defina JAVA_OPTS substituiria a variável inteira e derrubaria em silêncio o
+# dimensionamento por cgroup e o fail-fast em OOM. JAVA_OPTS soma extras.
+ENTRYPOINT ["sh", "-c", "exec java -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError $JAVA_OPTS -jar app.jar"]

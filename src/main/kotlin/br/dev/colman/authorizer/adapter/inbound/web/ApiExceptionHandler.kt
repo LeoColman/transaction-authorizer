@@ -5,7 +5,10 @@ import br.dev.colman.authorizer.domain.AccountNotFoundException
 import br.dev.colman.authorizer.domain.IdempotencyConflictException
 import br.dev.colman.authorizer.domain.UnsupportedCurrencyException
 import org.slf4j.LoggerFactory
+import org.springframework.dao.DataAccessException
+import org.springframework.dao.TransientDataAccessException
 import org.springframework.http.HttpHeaders
+import org.springframework.jdbc.CannotGetJdbcConnectionException
 import org.springframework.http.HttpStatus
 import org.springframework.http.HttpStatusCode
 import org.springframework.http.ProblemDetail
@@ -83,6 +86,27 @@ class ApiExceptionHandler : ResponseEntityExceptionHandler() {
             .body(problem(HttpStatus.BAD_REQUEST, "invalid-request", "Parâmetro inválido", "${e.variableName} não é um valor válido"))
     } else {
         super.handleMissingPathVariable(e, headers, status, request)
+    }
+
+    /**
+     * Falta de capacidade momentânea (pool de conexões esgotado, timeout de
+     * consulta) não é defeito: 503 diz ao cliente que a retentativa é válida e
+     * separa saturação de bug nos alarmes de 5xx. Sem escrita no banco antes do
+     * erro, então retentar é seguro.
+     */
+    @ExceptionHandler(CannotGetJdbcConnectionException::class, TransientDataAccessException::class)
+    fun temporariamenteIndisponivel(e: DataAccessException): ResponseEntity<ProblemDetail> {
+        log.warn("Capacidade esgotada ao acessar o banco: {}", e.message)
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+            .header(HttpHeaders.RETRY_AFTER, "1")
+            .body(
+                problem(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "service-unavailable",
+                    "Serviço temporariamente indisponível",
+                    "Capacidade esgotada; tente novamente",
+                ),
+            )
     }
 
     @ExceptionHandler(Exception::class)

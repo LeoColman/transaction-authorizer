@@ -136,6 +136,7 @@ passa por `double` em cliente nenhum e preserva a precisão integralmente.
 | Conta inexistente | 404 | Problem Details (RFC 9457) |
 | Conta desabilitada / moeda não suportada | 422 | Problem Details |
 | Mesmo `transactionId` com payload divergente | 409 | Problem Details (conflito de idempotência) |
+| Capacidade esgotada (pool de conexões, timeout) | 503 | Problem Details com `Retry-After` |
 | Payload inválido | 400 | Problem Details |
 
 Racional do mapeamento em [ADR-0004](docs/adr/0004-mapeamento-http.md).
@@ -158,6 +159,11 @@ Racional do mapeamento em [ADR-0004](docs/adr/0004-mapeamento-http.md).
 - **Carga**: mix 2/3 débito e 1/3 crédito com seed pelo mesmo caminho de produção (fila).
   Assertions: falhas < 1%, p99 < 800 ms, média < 200 ms. Knobs: `LOAD_RATE`,
   `LOAD_DURATION_SECONDS`, `LOAD_ACCOUNTS`.
+
+  Os números abaixo saem de um contêiner com 2 GiB de memória mas com acesso a todos
+  os núcleos do host: em uma task Fargate com vCPU fracionário o paralelismo (e com
+  ele o dimensionamento de threads de GC e de carriers das virtual threads) é menor,
+  então servem como referência de ordem de grandeza, não como previsão de produção.
 
   Resultado de referência (notebook local, stack completa no docker compose):
   **42.672 requisições, 0 falhas, ~569 req/s, média 1 ms, p99 2 ms**. Após a carga,
