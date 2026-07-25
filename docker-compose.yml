@@ -13,6 +13,10 @@ services:
     ports:
       - "127.0.0.1:4566:4566"
       - "127.0.0.1:4510-4559:4510-4559"
+    volumes:
+      # Hook de inicialização do LocalStack: roda quando o serviço fica pronto,
+      # antes de qualquer consumidor. Cria a fila JÁ com redrive para a DLQ.
+      - ./localstack/init-queues.sh:/etc/localstack/init/ready.d/init-queues.sh:ro
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:4566/_localstack/health" ]
       interval: 10s

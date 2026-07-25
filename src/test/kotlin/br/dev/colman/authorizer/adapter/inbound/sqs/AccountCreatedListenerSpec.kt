@@ -3,6 +3,7 @@ package br.dev.colman.authorizer.adapter.inbound.sqs
 import br.dev.colman.authorizer.application.port.inbound.NewAccount
 import br.dev.colman.authorizer.application.port.inbound.RegisterAccountsUseCase
 import br.dev.colman.authorizer.domain.AccountStatus
+import io.awspring.cloud.sqs.operations.SqsTemplate
 import tools.jackson.module.kotlin.jacksonObjectMapper
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
@@ -24,12 +25,14 @@ class AccountCreatedListenerSpec : FunSpec({
 
     lateinit var registerAccounts: RegisterAccountsUseCase
     lateinit var meterRegistry: SimpleMeterRegistry
+    lateinit var sqsTemplate: SqsTemplate
     lateinit var listener: AccountCreatedListener
 
     beforeTest {
         registerAccounts = mockk()
         meterRegistry = SimpleMeterRegistry()
-        listener = AccountCreatedListener(registerAccounts, objectMapper, meterRegistry)
+        sqsTemplate = mockk(relaxed = true)
+        listener = AccountCreatedListener(registerAccounts, objectMapper, meterRegistry, sqsTemplate, "dlq-de-teste")
     }
 
     test("converte o payload da fila em NewAccount (created_at em epoch-seconds)") {

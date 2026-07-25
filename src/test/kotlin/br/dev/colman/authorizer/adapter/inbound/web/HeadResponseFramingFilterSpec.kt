@@ -53,6 +53,46 @@ class HeadResponseFramingFilterSpec : FunSpec({
         response.getHeader(HttpHeaders.CONTENT_LENGTH) shouldBe null
     }
 
+    test("conta bytes escritos direto no stream, inclusive um a um") {
+        val response = MockHttpServletResponse()
+        val chain = FilterChain { _, resp ->
+            resp.outputStream.write("abc".toByteArray())
+            resp.outputStream.write('!'.code)
+        }
+
+        filtro.doFilter(requisicao("HEAD"), response, chain)
+
+        response.getHeader(HttpHeaders.CONTENT_LENGTH) shouldBe "4"
+    }
+
+    test("writer é reaproveitado entre chamadas, sem perder o que já foi escrito") {
+        // Criar um PrintWriter novo a cada getWriter() descartaria o buffer do
+        // anterior: o tamanho anunciado sairia menor que o corpo real.
+        val response = MockHttpServletResponse()
+        val chain = FilterChain { _, resp ->
+            resp.writer.write("12345")
+            resp.writer.write("678")
+        }
+
+        filtro.doFilter(requisicao("HEAD"), response, chain)
+
+        response.getHeader(HttpHeaders.CONTENT_LENGTH) shouldBe "8"
+    }
+
+    test("flushBuffer do handler não impede o enquadramento") {
+        // O wrapper segura o flush de propósito: comitar durante a cadeia
+        // tiraria a chance de declarar Content-Length depois dela.
+        val response = MockHttpServletResponse()
+        val chain = FilterChain { _, resp ->
+            resp.writer.write("corpo")
+            resp.flushBuffer()
+        }
+
+        filtro.doFilter(requisicao("HEAD"), response, chain)
+
+        response.getHeader(HttpHeaders.CONTENT_LENGTH) shouldBe "5"
+    }
+
     test("outros métodos passam intactos, sem o wrapper contador") {
         val response = MockHttpServletResponse()
         val chain = FilterChain { _, resp -> resp.writer.write("""{"ok":true}""") }

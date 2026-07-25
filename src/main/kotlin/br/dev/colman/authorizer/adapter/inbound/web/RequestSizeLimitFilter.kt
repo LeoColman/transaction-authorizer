@@ -78,7 +78,14 @@ class RequestSizeLimitFilter(
 
     private class LimitedRequest(request: HttpServletRequest, private val maxBytes: Long) :
         HttpServletRequestWrapper(request) {
-        override fun getInputStream(): ServletInputStream = LimitedInputStream(super.getInputStream(), maxBytes)
+
+        // Um wrapper por requisição, não por chamada: a contagem é acumulada no
+        // stream, então devolver uma instância nova a cada getInputStream()
+        // zeraria o total e deixaria passar corpo ilimitado lido em pedaços.
+        // A API Servlet exige o mesmo objeto em todas as chamadas.
+        private val stream: ServletInputStream by lazy { LimitedInputStream(super.getInputStream(), maxBytes) }
+
+        override fun getInputStream(): ServletInputStream = stream
     }
 
     private class LimitedInputStream(

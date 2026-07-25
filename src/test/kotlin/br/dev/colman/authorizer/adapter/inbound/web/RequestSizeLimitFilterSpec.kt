@@ -4,6 +4,7 @@ import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import jakarta.servlet.FilterChain
 import org.springframework.http.HttpStatus
 import org.springframework.mock.web.MockHttpServletRequest
@@ -79,6 +80,33 @@ class RequestSizeLimitFilterSpec : FunSpec({
         erro.message!! shouldContain "excede o limite"
         response.status shouldBe HttpStatus.OK.value()
         response.contentAsString shouldBe "resposta parcial"
+    }
+
+    test("rejeição descarta o que o handler já tinha escrito no buffer") {
+        // Sem reset(), o 413 sairia grudado no corpo parcial da resposta
+        // anterior, gerando JSON inválido para o cliente.
+        val response = MockHttpServletResponse()
+
+        filtro.doFilter(requisicao(ByteArray(teto.toInt() + 10), declararTamanho = false), response, FilterChain { req, resp ->
+            resp.writer.write("""{"lixo":"de um handler que comecou a responder"}""")
+            req.inputStream.readBytes()
+        })
+
+        response.status shouldBe HttpStatus.CONTENT_TOO_LARGE.value()
+        response.contentAsString shouldNotContain "lixo"
+        response.characterEncoding.uppercase() shouldBe "UTF-8"
+    }
+
+    test("limite vale também para leitura byte a byte") {
+        // InputStream.read() sem buffer passa pelo outro overload do contador.
+        val response = MockHttpServletResponse()
+
+        filtro.doFilter(requisicao(ByteArray(teto.toInt() + 1), declararTamanho = false), response, FilterChain { req, _ ->
+            @Suppress("EmptyWhileBlock")
+            while (req.inputStream.read() != -1) { }
+        })
+
+        response.status shouldBe HttpStatus.CONTENT_TOO_LARGE.value()
     }
 
     test("corpo exatamente no teto é aceito (sem off-by-one)") {

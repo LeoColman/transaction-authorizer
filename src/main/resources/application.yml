@@ -42,6 +42,12 @@ authorizer:
   sqs:
     account-created-queue: ${ACCOUNT_CREATED_QUEUE:conta-bancaria-criada}
     max-concurrent-messages: ${SQS_MAX_CONCURRENT_MESSAGES:100}
+    # Destino das mensagens que não têm como ser processadas. O redrive por
+    # maxReceiveCount (atributo da fila, provisionado com ela) cobre a falha
+    # repetida; esta configuração cobre o outro caso, o da mensagem malformada,
+    # que falharia para sempre e por isso é descartada do fluxo na primeira
+    # tentativa — a cópia na DLQ é o que a torna auditável (ADR-0005).
+    dead-letter-queue: ${ACCOUNT_CREATED_DLQ:conta-bancaria-criada-dlq}
 
 management:
   endpoints:

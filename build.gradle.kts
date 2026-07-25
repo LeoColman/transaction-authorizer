@@ -137,6 +137,10 @@ pitest {
         "br.dev.colman.authorizer.application.*",
         "br.dev.colman.authorizer.adapter.inbound.sqs.*",
         "br.dev.colman.authorizer.adapter.inbound.web.dto.*",
+        // Filtros: têm spec unitário próprio. Controller e ApiExceptionHandler
+        // continuam fora, cobertos só por integração.
+        "br.dev.colman.authorizer.adapter.inbound.web.RequestSizeLimitFilter*",
+        "br.dev.colman.authorizer.adapter.inbound.web.HeadResponseFramingFilter*",
     )
     targetTests = setOf("br.dev.colman.authorizer.*")
     threads = Runtime.getRuntime().availableProcessors().coerceAtMost(8)
@@ -147,6 +151,10 @@ pitest {
     // lógica de negócio: mutá-los gera sobreviventes que nenhum teste
     // comportamental deveria matar.
     avoidCallsTo = setOf("kotlin.jvm.internal", "org.slf4j")
+    // Contrato de I/O assíncrona da API Servlet: delegações puras que o MVC
+    // bloqueante nunca chama. Mutá-las gera sobreviventes que nenhum teste
+    // comportamental alcança sem simular um container assíncrono inteiro.
+    excludedMethods = setOf("isReady", "isFinished", "setReadListener", "setWriteListener")
     // Gate: score mínimo de mutação (%). Sobreviventes conhecidos documentados no README.
     mutationThreshold = 90
 }

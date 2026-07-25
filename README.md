@@ -32,6 +32,7 @@ flowchart LR
     subgraph Adapters_In[Adaptadores de entrada]
         WEB[REST<br>POST /transactions/id]
         SQS[Listener SQS<br>conta-bancaria-criada]
+        DLQ[/SQS DLQ<br>malformada ou redrive/]
     end
     subgraph Application[Aplicação]
         UC1[AuthorizeTransaction<br>UseCase]
@@ -45,6 +46,7 @@ flowchart LR
     end
     WEB --> UC1
     SQS --> UC2
+    SQS -.->|malformada| DLQ
     UC1 --> D
     UC2 --> D
     UC1 --> PG
@@ -61,9 +63,13 @@ flowchart LR
   requisições concorrentes com o mesmo id.
 - **Registro de contas idempotente**: redelivery da fila standard é inofensivo
   (`ON CONFLICT DO NOTHING`).
+- **Nenhuma mensagem some**: a malformada é copiada para a DLQ e retirada do lote na
+  primeira tentativa (reprocessá-la daria o mesmo erro para sempre); a válida que falha
+  por infraestrutura volta para a fila e, após `maxReceiveCount`, é movida pelo redrive
+  do próprio SQS ([ADR-0005](docs/adr/0005-consumo-sqs.md)).
 
 Tudo isso é provado por testes de integração com concorrência real
-(50 débitos simultâneos, corrida de idempotência, redelivery).
+(50 débitos simultâneos, corrida de idempotência, redelivery, e os dois caminhos até a DLQ).
 
 ## Como executar
 
@@ -210,8 +216,8 @@ bootstrap e pacote `config` (wiring sem lógica), source sets de teste.
 
 O que resta descoberto são caminhos inalcançáveis de propósito, não lacunas de
 teste: o guard de moeda cruzada em `Money` e no replay de `AuthorizationService`
-(com uma única moeda no enum não há como dispará-lo, ADR-0003, mesma razão dos 2
-sobreviventes de mutação abaixo), os métodos de I/O assíncrona dos wrappers de
+(com uma única moeda no enum não há como dispará-lo, ADR-0003, mesma razão de
+parte dos sobreviventes de mutação abaixo), os métodos de I/O assíncrona dos wrappers de
 stream dos filtros (`isReady`, `setReadListener`, `setWriteListener`), que a API
 Servlet obriga a implementar e o MVC bloqueante nunca chama, e o fallback do
 framework para path variable ausente por motivo diferente de conversão.
@@ -222,21 +228,30 @@ Cobertura diz que uma linha foi executada; mutação diz se algum teste **falha 
 comportamento muda**. O Pitest injeta defeitos artificiais (inverte condições, remove
 chamadas, troca retornos) e verifica se a suíte unitária os detecta.
 
-**Resultado: 66 de 68 mutantes mortos (97%), zero mutantes sem cobertura.**
-Gate de 90% no build (`mutationThreshold`).
+**Resultado: 100 de 109 mutantes mortos (92%), zero mutantes sem cobertura.**
+Gate de 90% no build (`mutationThreshold`). Os sobreviventes são equivalentes
+(mutação que não muda comportamento observável) ou os guards de moeda cruzada
+inalcançáveis com um enum de uma moeda só.
 
 ```bash
 ./gradlew pitest   # relatório em build/reports/pitest/index.html
 ```
 
-- Alvo: domínio, aplicação e adaptadores com testes unitários. Adaptadores cobertos por
-  integração (SQL/controller) ficam fora: mutantes lá seriam ruído que a suíte unitária
-  não tem como matar.
-- Filtrados da mutação: null-checks sintéticos do compilador Kotlin e chamadas de log
-  (não são comportamento de negócio).
-- Os 2 sobreviventes conhecidos são o guard `requireSameCurrency` de `Money`: com uma
-  única moeda no enum (ADR-0003) é impossível construir o caso que o dispara. O guard
-  fica como proteção para a evolução multi-moeda.
+- Alvo: domínio, aplicação, DTOs, listener SQS e os filtros web — tudo que tem spec
+  unitário. Repositórios JDBC, controller e handler de erro ficam fora por serem
+  cobertos só por integração: mutantes lá seriam ruído que a suíte unitária não tem
+  como matar.
+- Filtrados da mutação: null-checks sintéticos do compilador Kotlin, chamadas de log e
+  os métodos de I/O assíncrona da API Servlet (`isReady`, `isFinished`,
+  `setReadListener`, `setWriteListener`), que são delegações puras nunca chamadas pelo
+  MVC bloqueante.
+- Sobreviventes conhecidos: o guard `requireSameCurrency` de `Money`, impossível de
+  disparar com uma moeda só no enum (ADR-0003), mantido para a evolução multi-moeda; e
+  mutações equivalentes nos contadores de bytes dos filtros, que trocam o valor sem
+  mudar nada observável.
+- Ampliar o alvo aos filtros valeu a pena de imediato: expôs que
+  `RequestSizeLimitFilter` criava um contador novo a cada `getInputStream()`, o que
+  zerava a contagem e deixava passar corpo ilimitado lido em pedaços.
 
 ## Decisões de arquitetura (ADRs)
 
@@ -246,7 +261,7 @@ Gate de 90% no build (`mutationThreshold`).
 | [0002](docs/adr/0002-idempotencia-e-atomicidade.md) | UPDATE condicional + PK de transactions como mecanismo de consistência |
 | [0003](docs/adr/0003-somente-brl.md) | Somente BRL nesta versão |
 | [0004](docs/adr/0004-mapeamento-http.md) | 422 para recusa com envelope completo |
-| [0005](docs/adr/0005-consumo-sqs.md) | Consumo em lote, ack ON_SUCCESS, DLQ em produção |
+| [0005](docs/adr/0005-consumo-sqs.md) | Consumo em lote, ack ON_SUCCESS, DLQ pelos dois caminhos |
 | [0006](docs/adr/0006-stack-spring-boot-4-jdbc-virtual-threads.md) | Spring Boot 4, JdbcClient sem JPA, MVC + virtual threads (e por que não coroutines/WebFlux) |
 
 ## Deploy em cloud pública (proposta)
