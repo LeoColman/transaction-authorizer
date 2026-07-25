@@ -1,6 +1,6 @@
 # Transaction Authorizer
 
-![Cobertura total](https://img.shields.io/badge/cobertura%20total-97.5%25-brightgreen)
+![Cobertura total](https://img.shields.io/badge/cobertura%20total-97.2%25-brightgreen)
 ![Cobertura unitários](https://img.shields.io/badge/testes%20unit%C3%A1rios-62.8%25-yellow)
 ![Cobertura integração](https://img.shields.io/badge/testes%20de%20integra%C3%A7%C3%A3o-92.9%25-brightgreen)
 ![Fumaça](https://img.shields.io/badge/fuma%C3%A7a-15%2F15%20cen%C3%A1rios-brightgreen)
@@ -167,12 +167,19 @@ Racional do mapeamento em [ADR-0004](docs/adr/0004-mapeamento-http.md).
   ele o dimensionamento de threads de GC e de carriers das virtual threads) é menor,
   então servem como referência de ordem de grandeza, não como previsão de produção.
 
-  Resultado de referência (notebook local, stack completa no docker compose):
-  **42.672 requisições, 0 falhas, ~569 req/s, média 1 ms, p99 2 ms**. Após a carga,
-  verificação de consistência no banco: para todas as contas,
+  Resultado de referência (notebook local, stack completa no docker compose, defaults
+  da simulação): **42.672 requisições, 0 falhas, ~569 req/s, média 1 ms, p99 5 ms**.
+  Após a carga, verificação de consistência no banco: para todas as contas,
   `saldo = SUM(créditos aprovados) - SUM(débitos aprovados)`, com **zero divergências
-  e zero saldos negativos** em 42.678 transações gravadas. A fila com 100.000 contas
-  do desafio (200.000 no teste, gerador executado duas vezes) foi drenada integralmente.
+  e zero saldos negativos** em 42.672 transações gravadas — exatamente uma por
+  requisição. A fila com as 100.000 contas do desafio foi drenada em paralelo à carga
+  (100.500 contas no banco ao final, somando as 500 do seed da simulação).
+
+  Elevando o rate até o serviço saturar (`LOAD_RATE=400 LOAD_DURATION_SECONDS=60
+  ./gradlew gatlingRun`): **567.147 requisições, 0 falhas, ~7.462 req/s, média 3 ms,
+  p99 38 ms**, com a mesma verificação de consistência intacta. É o número citado no
+  [ADR-0006](docs/adr/0006-stack-spring-boot-4-jdbc-virtual-threads.md) como evidência
+  do modelo de threads.
 
 ### Cobertura de código (Kover)
 
@@ -180,7 +187,7 @@ Racional do mapeamento em [ADR-0004](docs/adr/0004-mapeamento-http.md).
 |---|---|---|
 | Unitários | 62,8% | Domínio, aplicação e mapeamento de DTOs — isolados com MockK |
 | Integração | 92,9% | Tudo acima + adaptadores reais: repositórios Postgres, controller, listener SQS |
-| **Total (unit + integração)** | **97,5%** | Gate de 80% no build (`koverVerify`) |
+| **Total (unit + integração)** | **97,2%** | Gate de 80% no build (`koverVerify`) |
 
 A leitura correta dos números: na arquitetura hexagonal, adaptadores (SQL, HTTP,
 fila) são deliberadamente testados contra infraestrutura real na camada de
@@ -201,12 +208,13 @@ cobertura: a aplicação roda em container separado (JVM externa ao agente).
 Relatório em `build/reports/kover/html/index.html`. Excluídos da medição: classe de
 bootstrap e pacote `config` (wiring sem lógica), source sets de teste.
 
-As 10 linhas restantes são inalcançáveis de propósito, não lacunas de teste: o
-guard de moeda cruzada em `Money` e no replay de `AuthorizationService` (com uma
-única moeda no enum não há como dispará-lo, ADR-0003, mesma razão dos 2
-sobreviventes de mutação abaixo) e os métodos de I/O assíncrona dos wrappers de
+O que resta descoberto são caminhos inalcançáveis de propósito, não lacunas de
+teste: o guard de moeda cruzada em `Money` e no replay de `AuthorizationService`
+(com uma única moeda no enum não há como dispará-lo, ADR-0003, mesma razão dos 2
+sobreviventes de mutação abaixo), os métodos de I/O assíncrona dos wrappers de
 stream dos filtros (`isReady`, `setReadListener`, `setWriteListener`), que a API
-Servlet obriga a implementar e o MVC bloqueante nunca chama.
+Servlet obriga a implementar e o MVC bloqueante nunca chama, e o fallback do
+framework para path variable ausente por motivo diferente de conversão.
 
 ### Testes de mutação (Pitest)
 
@@ -306,8 +314,7 @@ expand/contract (nunca quebrar a versão N-1, que continua rodando durante o shi
   dos clientes (dias, não anos).
 - **Testes de caos** (falha de banco no meio da autorização) e **testes de contrato**
   (Pact) para os consumidores da API.
-- **Teto de saldo explícito**: `NUMERIC(19,2)` comporta saldo até ~10^17. Um crédito
-  válido que estourasse esse teto hoje responderia 500 (e, como nada é gravado, o retry
-  repetiria o erro). Cenário exige saldo de centenas de quatrilhões de reais, mas a
-  versão de produção teria teto de saldo por conta com recusa de negócio explícita em
-  vez de erro genérico.
+- **Teto de saldo por conta**: hoje o único teto é o da faixa suportada (`NUMERIC(19,2)`,
+  ~10^17), e o crédito que o excederia é recusado como resultado de negócio (422, saldo
+  intacto). Em produção o limite seria por conta e por política de produto, não pelo tipo
+  da coluna, e viria com um código de recusa próprio no envelope.

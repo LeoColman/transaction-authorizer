@@ -1,5 +1,6 @@
 package br.dev.colman.authorizer.adapter.inbound.web
 
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -7,6 +8,7 @@ import jakarta.servlet.FilterChain
 import org.springframework.http.HttpStatus
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.mock.web.MockHttpServletResponse
+import java.io.IOException
 
 class RequestSizeLimitFilterSpec : FunSpec({
 
@@ -54,6 +56,29 @@ class RequestSizeLimitFilterSpec : FunSpec({
 
         response.status shouldBe HttpStatus.CONTENT_TOO_LARGE.value()
         response.contentAsString shouldContain "payload-too-large"
+    }
+
+    test("estouro depois da resposta comitada propaga o erro em vez de reescrever") {
+        // Com bytes já no socket, response.reset() lançaria IllegalStateException
+        // e trocaria o erro real por um erro de framework. O filtro devolve a
+        // falha original e deixa o container encerrar a conexão.
+        val response = MockHttpServletResponse()
+
+        val erro = shouldThrow<IOException> {
+            filtro.doFilter(
+                requisicao(ByteArray(teto.toInt() + 10), declararTamanho = false),
+                response,
+                FilterChain { req, resp ->
+                    resp.writer.write("resposta parcial")
+                    resp.flushBuffer()
+                    req.inputStream.readBytes()
+                },
+            )
+        }
+
+        erro.message!! shouldContain "excede o limite"
+        response.status shouldBe HttpStatus.OK.value()
+        response.contentAsString shouldBe "resposta parcial"
     }
 
     test("corpo exatamente no teto é aceito (sem off-by-one)") {

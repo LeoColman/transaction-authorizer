@@ -8,6 +8,7 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.mockk.every
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.dao.QueryTimeoutException
 import org.springframework.transaction.CannotCreateTransactionException
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.http.HttpStatus
@@ -28,20 +29,22 @@ class InternalErrorIT : FunSpec() {
     @LocalServerPort
     private var port: Int = 0
 
+    private fun autorizar() = RestClient.builder()
+        .baseUrl("http://localhost:$port")
+        .defaultStatusHandler({ true }, { _, _ -> })
+        .build()
+        .post()
+        .uri("/transactions/${UUID.randomUUID()}")
+        .contentType(MediaType.APPLICATION_JSON)
+        .body("""{"accountId":"${UUID.randomUUID()}","type":"CREDIT","amount":{"value":1.00,"currency":"BRL"}}""")
+        .retrieve()
+        .toEntity(String::class.java)
+
     init {
         test("erro inesperado no caso de uso responde 500 problem detail sem vazar detalhes") {
             every { authorizeTransaction.authorize(any()) } throws IllegalStateException("segredo interno")
 
-            val response = RestClient.builder()
-                .baseUrl("http://localhost:$port")
-                .defaultStatusHandler({ true }, { _, _ -> })
-                .build()
-                .post()
-                .uri("/transactions/${UUID.randomUUID()}")
-                .contentType(MediaType.APPLICATION_JSON)
-                .body("""{"accountId":"${UUID.randomUUID()}","type":"CREDIT","amount":{"value":1.00,"currency":"BRL"}}""")
-                .retrieve()
-                .toEntity(String::class.java)
+            val response = autorizar()
 
             response.statusCode shouldBe HttpStatus.INTERNAL_SERVER_ERROR
             response.body!! shouldContain "internal-error"
@@ -56,16 +59,22 @@ class InternalErrorIT : FunSpec() {
             every { authorizeTransaction.authorize(any()) } throws
                 CannotCreateTransactionException("Could not open JDBC Connection for transaction")
 
-            val response = RestClient.builder()
-                .baseUrl("http://localhost:$port")
-                .defaultStatusHandler({ true }, { _, _ -> })
-                .build()
-                .post()
-                .uri("/transactions/${UUID.randomUUID()}")
-                .contentType(MediaType.APPLICATION_JSON)
-                .body("""{"accountId":"${UUID.randomUUID()}","type":"CREDIT","amount":{"value":1.00,"currency":"BRL"}}""")
-                .retrieve()
-                .toEntity(String::class.java)
+            val response = autorizar()
+
+            response.statusCode shouldBe HttpStatus.SERVICE_UNAVAILABLE
+            response.headers.getFirst("Retry-After") shouldBe "1"
+            response.body!! shouldContain "service-unavailable"
+        }
+
+        test("falha transitória DENTRO da transação também responde 503, não 500") {
+            // Terceiro ramo do handler: timeout de consulta e deadlock chegam
+            // como TransientDataAccessException, já com rollback feito antes do
+            // commit. Sem este caso, remover o tipo da lista não quebraria a
+            // suíte e a saturação voltaria a virar 500 em silêncio.
+            every { authorizeTransaction.authorize(any()) } throws
+                QueryTimeoutException("Consulta excedeu o tempo limite")
+
+            val response = autorizar()
 
             response.statusCode shouldBe HttpStatus.SERVICE_UNAVAILABLE
             response.headers.getFirst("Retry-After") shouldBe "1"

@@ -18,9 +18,7 @@ import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.sqs.SqsClient
 import software.amazon.awssdk.services.sqs.model.SendMessageBatchRequestEntry
 import java.net.URI
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
+import java.sql.DriverManager
 import java.time.Duration
 import java.util.UUID
 
@@ -33,7 +31,8 @@ import java.util.UUID
  *
  * Knobs por variável de ambiente:
  *   BASE_URL (http://localhost:8080), SQS_ENDPOINT (http://localhost:4566),
- *   LOAD_ACCOUNTS (500), LOAD_RATE usuários/s (30), LOAD_DURATION_SECONDS (60)
+ *   LOAD_ACCOUNTS (500), LOAD_RATE usuários/s (30), LOAD_DURATION_SECONDS (60),
+ *   DB_URL (jdbc:postgresql://localhost:5433/authorizer), DB_USER, DB_PASSWORD
  *
  * Execução: ./gradlew gatlingRun
  */
@@ -43,6 +42,11 @@ class AuthorizationSimulation : Simulation() {
     private val sqsEndpoint = env("SQS_ENDPOINT", "http://localhost:4566")
     private val queueName = env("QUEUE_NAME", "conta-bancaria-criada")
     private val accountCount = env("LOAD_ACCOUNTS", "500").toInt()
+
+    // Só para saber quando o seed terminou; a carga em si é toda por HTTP.
+    private val dbUrl = env("DB_URL", "jdbc:postgresql://localhost:5433/authorizer")
+    private val dbUser = env("DB_USER", "authorizer")
+    private val dbPassword = env("DB_PASSWORD", "authorizer")
     private val rate = env("LOAD_RATE", "30").toDouble()
     private val durationSeconds = env("LOAD_DURATION_SECONDS", "60").toLong()
 
@@ -74,28 +78,44 @@ class AuthorizationSimulation : Simulation() {
         awaitAccountsRegistered()
     }
 
-    /** Considera o seed pronto quando a última conta publicada autoriza um crédito. */
+    /**
+     * Espera o consumidor registrar TODAS as contas semeadas, contando-as no banco.
+     *
+     * Sondar uma conta específica não serve: a fila é standard e entrega fora de
+     * ordem (ADR-0005), então a última publicada pode ser registrada antes de
+     * outras e liberaria a simulação com contas ainda inexistentes — elas
+     * responderiam 404 e apareceriam como falha de carga sem defeito algum no
+     * autorizador.
+     *
+     * O contador `authorizer.accounts.registered` também não serve: é global e o
+     * `message-generator` publica na mesma fila, então as contas dele satisfariam
+     * o alvo antes das daqui. A contagem por id é o único sinal que fala das
+     * contas desta execução — e, ao contrário de sondar autorizando, não grava
+     * transação nenhuma que entraria na medição.
+     */
     private fun awaitAccountsRegistered() {
-        val http = HttpClient.newHttpClient()
-        val probeAccount = accountIds.last()
         val deadline = System.currentTimeMillis() + Duration.ofSeconds(60).toMillis()
 
         while (System.currentTimeMillis() < deadline) {
-            val request = HttpRequest.newBuilder()
-                .uri(URI.create("$baseUrl/transactions/${UUID.randomUUID()}"))
-                .header("Content-Type", "application/json")
-                .POST(
-                    HttpRequest.BodyPublishers.ofString(
-                        """{"accountId":"$probeAccount","type":"CREDIT","amount":{"value":0.01,"currency":"BRL"}}""",
-                    ),
-                )
-                .build()
-            val response = http.send(request, HttpResponse.BodyHandlers.ofString())
-            if (response.statusCode() == 200) return
+            if (contasSemeadasRegistradas() == accountCount) return
             Thread.sleep(500)
         }
-        error("Seed de contas não ficou pronto em 60s: consumidor SQS está rodando?")
+        error(
+            "Seed de contas não ficou pronto em 60s " +
+                "(${contasSemeadasRegistradas()}/$accountCount): consumidor SQS está rodando?",
+        )
     }
+
+    private fun contasSemeadasRegistradas(): Int =
+        DriverManager.getConnection(dbUrl, dbUser, dbPassword).use { conn ->
+            conn.prepareStatement("SELECT count(*) FROM accounts WHERE id::text = ANY (?)").use { st ->
+                st.setArray(1, conn.createArrayOf("text", accountIds.toTypedArray()))
+                st.executeQuery().use { rs ->
+                    rs.next()
+                    rs.getInt(1)
+                }
+            }
+        }
 
     private val httpProtocol = http
         .baseUrl(baseUrl)

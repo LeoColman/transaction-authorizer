@@ -4,6 +4,7 @@ import br.dev.colman.authorizer.application.port.outbound.AccountRepository
 import br.dev.colman.authorizer.domain.Account
 import br.dev.colman.authorizer.domain.AccountStatus
 import br.dev.colman.authorizer.domain.Money
+import io.micrometer.core.instrument.MeterRegistry
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.comparables.shouldBeEqualComparingTo
@@ -26,6 +27,7 @@ import java.util.concurrent.Executors
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class AuthorizationFlowIT(
     private val accounts: AccountRepository,
+    private val meterRegistry: MeterRegistry,
 ) : FunSpec() {
 
     @LocalServerPort
@@ -61,6 +63,11 @@ class AuthorizationFlowIT(
 
     private fun body(accountId: UUID, type: String, value: String, currency: String = "BRL") =
         """{"accountId":"$accountId","type":"$type","amount":{"value":$value,"currency":"$currency"}}"""
+
+    private fun contador(type: String, status: String, replayed: String): Double = meterRegistry
+        .find("authorizer.transactions")
+        .tags("type", type, "status", status, "replayed", replayed)
+        .counter()?.count() ?: 0.0
 
     init {
         test("crédito em conta nova é aprovado com 200 e resposta no contrato do desafio") {
@@ -108,6 +115,25 @@ class AuthorizationFlowIT(
             val replay = post(transactionId, body(accountId, "CREDIT", "9999999999999.99"))
             replay.statusCode shouldBe HttpStatus.UNPROCESSABLE_CONTENT
             replay.headers.getFirst("X-Idempotent-Replay") shouldBe "true"
+        }
+
+        test("contador de transações distingue type, status e replayed") {
+            // Sem asserção sobre as tags, trocá-las (ou fixar replayed em false)
+            // passaria despercebido: só o nome da métrica é verificado no smoke.
+            val accountId = createAccount()
+            val transactionId = UUID.randomUUID()
+
+            val aprovados = contador("CREDIT", "SUCCEEDED", "false")
+            post(transactionId, body(accountId, "CREDIT", "12.34"))
+            contador("CREDIT", "SUCCEEDED", "false") shouldBe aprovados + 1
+
+            val replays = contador("CREDIT", "SUCCEEDED", "true")
+            post(transactionId, body(accountId, "CREDIT", "12.34"))
+            contador("CREDIT", "SUCCEEDED", "true") shouldBe replays + 1
+
+            val recusados = contador("DEBIT", "FAILED", "false")
+            post(UUID.randomUUID(), body(accountId, "DEBIT", "9999.00"))
+            contador("DEBIT", "FAILED", "false") shouldBe recusados + 1
         }
 
         test("débito do valor exato do saldo zera a conta") {

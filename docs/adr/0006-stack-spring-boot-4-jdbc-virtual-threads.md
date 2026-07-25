@@ -65,4 +65,8 @@ squad.
 - Virtual threads exigem atenção a pinning (blocos synchronized longos); o código não
   usa synchronized e o driver Postgres JDBC é compatível.
 - O ganho depende de o I/O ser realmente bloqueante e barato de desmontar: medido em
-  carga, 567 mil requisições a ~7.5k req/s com p99 de 45 ms e pico de 1,2 GiB de heap.
+  carga com `LOAD_RATE=400 LOAD_DURATION_SECONDS=60 ./gradlew gatlingRun` contra a
+  stack do docker compose, 567.147 requisições a ~7.462 req/s, zero falhas, média de
+  3 ms e p99 de 38 ms, dentro do limite de 2 GiB do contêiner. O número de referência
+  com os defaults da simulação está no README; os dois saem da mesma ferramenta e
+  diferem só pelo rate.

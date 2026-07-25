@@ -84,6 +84,8 @@ dependencies {
     "integrationTestImplementation"("org.awaitility:awaitility-kotlin")
     "smokeTestImplementation"("org.awaitility:awaitility-kotlin")
     "gatlingImplementation"("software.amazon.awssdk:sqs")
+    // Só para a espera de seed contar as contas desta execução (ver a simulação).
+    "gatlingRuntimeOnly"("org.postgresql:postgresql")
 }
 
 tasks.withType<Test> {
