@@ -40,12 +40,17 @@ data class AuthorizeTransactionRequest(
 }
 
 data class AmountRequest(
-    // DecimalMax compara por valor (compareTo, à prova de overflow) e barra
-    // notação exponencial com escala absurda que passaria pelo @Digits (cujo
-    // cálculo precision - scale estoura int) e quebraria a normalização.
+    // Teto de UMA transação: 15 dígitos inteiros, deliberadamente abaixo do teto
+    // da coluna NUMERIC(19,2) (17 dígitos, ver Money.MAX) para que o saldo tenha
+    // margem de acumulação em vez de uma única transação poder enchê-la.
+    // DecimalMax e Digits declaram o MESMO teto: DecimalMax compara por valor
+    // (compareTo, à prova de overflow) e barra notação exponencial com escala
+    // absurda que passaria pelo Digits (cujo cálculo precision - scale estoura
+    // int); Digits mantém a mensagem específica de formato. Divergir os dois
+    // faria o schema OpenAPI publicar um máximo que o servidor rejeita.
     @field:NotNull(message = "amount.value é obrigatório")
     @field:DecimalMin(value = "0.01", message = "amount.value deve ser no mínimo 0.01")
-    @field:DecimalMax(value = "99999999999999999.99", message = "amount.value excede o valor máximo suportado")
+    @field:DecimalMax(value = "999999999999999.99", message = "amount.value excede o valor máximo suportado")
     @field:Digits(integer = 15, fraction = 2, message = "amount.value deve ter no máximo 15 dígitos inteiros e 2 casas decimais")
     val value: BigDecimal?,
 

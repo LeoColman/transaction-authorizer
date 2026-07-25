@@ -239,6 +239,26 @@ class AuthorizationFlowIT(
                 .toEntity(String::class.java).statusCode shouldBe HttpStatus.NOT_ACCEPTABLE
         }
 
+        test("teto de valor por transação: 15 dígitos aceito, 16 rejeitado") {
+            val accountId = createAccount()
+
+            post(UUID.randomUUID(), body(accountId, "CREDIT", "999999999999999.99"))
+                .statusCode shouldBe HttpStatus.OK
+            post(UUID.randomUUID(), body(accountId, "CREDIT", "1000000000000000.00"))
+                .statusCode shouldBe HttpStatus.BAD_REQUEST
+        }
+
+        test("o teto publicado no OpenAPI é o mesmo que o servidor aceita") {
+            val docs = client.get().uri("/v3/api-docs").retrieve().toEntity(String::class.java).body!!
+            val maximum = Regex(""""maximum"\s*:\s*([0-9.E+]+)""").find(docs)!!.groupValues[1]
+
+            // O valor anunciado no contrato precisa ser aceito de fato: divergir
+            // faz cliente gerado do schema tomar 400 em valor "válido".
+            val accountId = createAccount()
+            post(UUID.randomUUID(), body(accountId, "CREDIT", BigDecimal(maximum).toPlainString()))
+                .statusCode shouldBe HttpStatus.OK
+        }
+
         test("valor em notação exponencial com escala absurda responde 400, não 500") {
             val accountId = createAccount()
 
