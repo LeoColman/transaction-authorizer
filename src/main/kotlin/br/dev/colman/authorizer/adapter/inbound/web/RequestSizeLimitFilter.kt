@@ -21,10 +21,15 @@ import java.io.IOException
  * HIGHEST_PRECEDENCE: precisa rodar ANTES de qualquer filtro do framework que
  * leia o corpo (em especial o OrderedFormContentFilter do Boot, ordem -9900, que
  * drena corpo form-urlencoded de PUT/PATCH/DELETE). Content-Length acima do teto
- * responde 413 sem ler o corpo; corpo chunked é limitado durante a leitura,
- * onde quer que aconteça — se o estouro escapar como IOException até este filtro
- * (ex.: parse de form), vira 413; se o converter Jackson o embrulhar
- * (corpo JSON), o handler devolve 400. O maior payload legítimo tem ~200 bytes.
+ * responde 413 sem ler o corpo; corpo chunked é limitado enquanto é lido — se o
+ * estouro escapar como IOException até este filtro (ex.: parse de form), vira
+ * 413; se o converter Jackson o embrulhar (corpo JSON), o handler devolve 400.
+ * O maior payload legítimo tem ~200 bytes.
+ *
+ * O limite depende de alguém abrir o stream, então requisições que o MVC rejeita
+ * antes disso (content-type, método ou Accept incompatíveis) não passam por aqui:
+ * quem contém o corpo descartado nesse caminho é `server.tomcat.max-swallow-size`,
+ * alinhado a este mesmo teto.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)

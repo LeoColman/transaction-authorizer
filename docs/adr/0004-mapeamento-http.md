@@ -23,6 +23,7 @@ do cliente nem do servidor, e o cliente precisa distinguir recusa de falha.
 | Payload inválido | 400 | Problem Details |
 | `Accept` sem `application/json` | 406 | Problem Details do framework (rejeitado ANTES de executar a autorização) |
 | Corpo maior que o limite (16 KiB) | 413 | Problem Details (rejeitado ANTES de executar a autorização) |
+| Corpo grande em requisição já rejeitada por content-type/método/Accept | 415/405/406 | O status da rejeição; o corpo excedente é cortado pelo container (`max-swallow-size`), sem 413 |
 | Método/rota/content-type inválidos | 405/404/415 | Problem Details do framework |
 | Pool de conexões esgotado / timeout no banco | 503 + `Retry-After` | Problem Details |
 
