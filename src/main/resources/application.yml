@@ -75,11 +75,6 @@ server:
     # uma conexão parada barata (medido: 150 conexões em trickle sem impacto).
     connection-timeout: 10s
     keep-alive-timeout: 15s
-    # Corpo de requisição que o MVC rejeita antes de ler (content-type, método ou
-    # Accept incompatíveis) não passa pelo RequestSizeLimitFilter — ninguém abre o
-    # stream. Quem decide quanto desse corpo aceitar é o container: alinhado ao
-    # teto da aplicação, ele para de engolir em vez de aceitar os 2 MiB padrão.
-    max-swallow-size: 16KB
 
 ---
 # Perfil "local": desenvolvimento com LocalStack (docker compose ativa json,local).

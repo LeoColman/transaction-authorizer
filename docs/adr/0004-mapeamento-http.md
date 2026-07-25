@@ -23,7 +23,7 @@ do cliente nem do servidor, e o cliente precisa distinguir recusa de falha.
 | Payload inválido | 400 | Problem Details |
 | `Accept` sem `application/json` | 406 | Problem Details do framework (rejeitado ANTES de executar a autorização) |
 | Corpo maior que o limite (16 KiB) | 413 | Problem Details (rejeitado ANTES de executar a autorização) |
-| Corpo grande em requisição já rejeitada por content-type/método/Accept | 415/405/406 | O status da rejeição; o corpo excedente é cortado pelo container (`max-swallow-size`), sem 413 |
+| Corpo grande em requisição já rejeitada por content-type/método/Accept | 415/405/406 | O status da rejeição, sem 413: ninguém abre o corpo, que é descartado pelo container |
 | Método/rota/content-type inválidos | 405/404/415 | Problem Details do framework |
 | Pool de conexões esgotado / timeout no banco | 503 + `Retry-After` | Problem Details |
 
@@ -41,6 +41,13 @@ inatividade, não de duração total: um cliente que envia bytes devagar mantém
 conexão aberta, e limitar isso (taxa mínima, duração máxima) cabe ao API Gateway
 da arquitetura proposta.
 
+- **O teto de corpo vale para quem lê o corpo.** Quando o MVC rejeita antes disso
+  (content-type, método ou `Accept` incompatíveis), o corpo é descartado pelo
+  container no limite padrão dele. Alinhar esse limite ao teto da aplicação foi
+  testado e revertido: acima do limite o Tomcat encerra a conexão, e a resposta de
+  erro já está comitada, então não há como anunciar `Connection: close` — a
+  requisição seguinte do cliente se perderia em silêncio. Aceitar o descarte de
+  alguns KB extras preserva a conexão e não custa memória da aplicação.
 - **503 separa saturação de defeito**: esgotamento de pool e timeout de consulta são
   transitórios e ocorrem antes de qualquer escrita, então a retentativa é segura e o
   cliente é informado disso (`Retry-After`). Respondê-los como 500 misturaria falta de

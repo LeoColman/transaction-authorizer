@@ -28,8 +28,13 @@ import java.io.IOException
  *
  * O limite depende de alguém abrir o stream, então requisições que o MVC rejeita
  * antes disso (content-type, método ou Accept incompatíveis) não passam por aqui:
- * quem contém o corpo descartado nesse caminho é `server.tomcat.max-swallow-size`,
- * alinhado a este mesmo teto.
+ * o corpo é descartado pelo container até `max-swallow-size`, deixado no padrão
+ * de propósito. Baixá-lo até este teto foi testado e reprovado: passando do
+ * limite o Tomcat encerra a conexão, e nesse ponto a resposta de erro já foi
+ * comitada, então não há como anunciar `Connection: close` (RFC 9112 §9.6) — a
+ * requisição seguinte de um cliente com keep-alive se perderia em silêncio.
+ * Descartar alguns KB a mais custa menos que quebrar a conexão de quem só errou
+ * o content-type, e o corpo descartado nunca chega à memória da aplicação.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
