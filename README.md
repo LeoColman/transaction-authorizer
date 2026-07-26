@@ -75,7 +75,10 @@ Tudo isso é provado por testes de integração com concorrência real
 
 Pré-requisitos: Docker e JDK 21 (apenas para rodar testes/Gatling fora do container).
 O JDK precisa ser o 21 mesmo: é a versão exigida pelo daemon do Gradle, e o download
-automático de toolchain não cobre esse caso. As portas 8080, 5433 e 4566 precisam estar
+automático de toolchain não cobre esse caso. Se o JDK padrão da máquina for outro, basta
+ter um 21 instalado (o Gradle o encontra sozinho nos caminhos usuais); se ele estiver
+fora do lugar, aponte com `JAVA_HOME=/caminho/do/jdk-21 ./gradlew ...` ou
+`-Porg.gradle.java.installations.paths=/caminho/do/jdk-21`. As portas 8080, 5433 e 4566 precisam estar
 livres, e a primeira subida baixa dependências Go dentro do gerador de contas, então
 exige rede.
 
@@ -215,7 +218,9 @@ esteja no ar. Só `test` roda sem Docker.
 
   Elevando o rate até o serviço saturar (`LOAD_RATE=400 LOAD_DURATION_SECONDS=60
   ./gradlew gatlingRun`): **567.147 requisições, 0 falhas, ~7.462 req/s, média 3 ms,
-  p99 38 ms**, com a mesma verificação de consistência intacta. É o número citado no
+  p99 38 ms**, com a mesma verificação de consistência intacta. A vazão e a contagem
+  se reproduzem de forma estável; a latência de cauda depende do que mais estiver
+  rodando na máquina (uma repetição com o host ocupado deu p99 de 68 ms). É o número citado no
   [ADR-0006](docs/adr/0006-stack-spring-boot-4-jdbc-virtual-threads.md) como evidência
   do modelo de threads.
 
