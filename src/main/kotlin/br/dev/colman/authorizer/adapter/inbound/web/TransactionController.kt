@@ -90,8 +90,16 @@ class TransactionController(
         ),
         ApiResponse(
             responseCode = "503",
-            description = "Capacidade esgotada (pool de conexões, timeout). Nada foi gravado: " +
-                "a retentativa é segura, ver Retry-After",
+            description = "Capacidade esgotada (pool de conexões, timeout de consulta, espera por lock). " +
+                "Nada foi gravado: a retentativa é segura, ver Retry-After",
+            content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
+        ),
+        ApiResponse(
+            responseCode = "500",
+            description = "Erro interno. No caso específico de falha ao concluir a transação " +
+                "(type uncertain-result), o resultado é indeterminado e pode ter sido efetivado: " +
+                "reenvie a MESMA requisição com o mesmo transactionId para descobrir o desfecho, " +
+                "nunca com um id novo",
             content = [Content(mediaType = PROBLEM_JSON, schema = Schema(implementation = ProblemDetail::class))],
         ),
     )
