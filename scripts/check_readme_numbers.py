@@ -57,10 +57,16 @@ def pitest_scope(build_file: Path):
 
 
 def mutation_score(report: Path):
-    root = ET.parse(report).getroot()
-    mutations = root.findall("mutation")
-    killed = sum(1 for m in mutations if m.get("status") == "KILLED")
-    return killed, len(mutations)
+    """Usa `detected`, que é o critério do próprio Pitest.
+
+    Contar só `status == KILLED` subestima: mutante que morre por timeout ou
+    erro de memória também é detectado. A diferença aparece justamente em
+    máquina lenta — no CI, vários mutantes que morrem rápido localmente caem em
+    TIMED_OUT, e o número despencava sem que a suíte tivesse piorado.
+    """
+    mutations = ET.parse(report).getroot().findall("mutation")
+    detected = sum(1 for m in mutations if m.get("detected") == "true")
+    return detected, len(mutations)
 
 
 def smoke_scenarios(source: Path) -> int:
@@ -72,6 +78,10 @@ def rounded(value: float) -> str:
     return f"{value:.1f}"
 
 
+# Tolerância que marca "isto é um piso": qualquer medição acima dele serve.
+FLOOR = float("inf")
+
+
 class Verdict:
     def __init__(self, tag: str, failed: bool, reason: str = ""):
         self.tag, self.failed, self.reason = tag, failed, reason
@@ -79,6 +89,12 @@ class Verdict:
 
 def compare(measured: float, published: float, tolerance: float) -> Verdict:
     """Publicar menos que o medido é conservador; publicar mais é mentira."""
+    # Piso: medir acima é o esperado e nunca é defasagem, mas medir ABAIXO
+    # continua sendo promessa não cumprida.
+    if tolerance == FLOOR:
+        if measured < published:
+            return Verdict("PROMETE DEMAIS", True, "a medição não alcança o piso publicado")
+        return Verdict("ok", False)
     if measured < published - tolerance:
         return Verdict("PROMETE DEMAIS", True, "o README anuncia mais do que a medição sustenta")
     # Defasado para baixo além de um ponto deixa de ser conservadorismo e vira
@@ -143,14 +159,16 @@ def main() -> int:
          find(r"\| Integração \| ([\d,]+)%", readme, "tabela integração"), 0.15),
         ("cobertura unitária no escopo do Pitest", rounded(core).replace(".", ","),
          find(r"suíte unitária cobre \*\*([\d,]+)%\*\*", readme, "cobertura do núcleo"), 0.15),
-        ("badge de mutação", str(round(mutation_pct)),
-         find(r"mutantes%20mortos-(\d+)%25", readme, "badge de mutação"), 1.0),
-        ("mutantes mortos", str(killed),
-         find(r"\*\*Resultado: (\d+) de \d+ mutantes mortos", readme, "mutantes mortos"), 1.0),
+        # Piso, não medição pontual: o score de mutação depende da máquina
+        # (timeouts em runner lento), então publicar o valor exato de uma
+        # execução tornaria o gate instável. O README anuncia o mínimo, e o
+        # gate cobra que a medição atual o sustente.
+        ("piso de mutação no badge", str(round(mutation_pct)),
+         find(r"mutantes%20mortos-(\d+)%25%2B", readme, "badge de mutação"), FLOOR),
+        ("piso de mutação no texto", str(round(mutation_pct)),
+         find(r"pelo menos \*\*(\d+)%\*\* dos mutantes", readme, "piso de mutação"), FLOOR),
         ("mutantes gerados", str(mutants),
-         find(r"\*\*Resultado: \d+ de (\d+) mutantes mortos", readme, "mutantes gerados"), 0.0),
-        ("percentual de mutação no texto", str(round(mutation_pct)),
-         find(r"mutantes mortos \((\d+)%\)", readme, "percentual de mutação"), 1.0),
+         find(r"(\d+) mutantes gerados", readme, "mutantes gerados"), 0.0),
         ("cenários de fumaça", str(scenarios),
          find(r"fuma%C3%A7a-(\d+)%2F\d+%20cen%C3%A1rios", readme, "badge de fumaça"), 0.0),
     ]

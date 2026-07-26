@@ -4,7 +4,7 @@
 ![Cobertura unitários](https://img.shields.io/badge/testes%20unit%C3%A1rios-61.5%25-yellow)
 ![Cobertura integração](https://img.shields.io/badge/testes%20de%20integra%C3%A7%C3%A3o-92.3%25-brightgreen)
 ![Fumaça](https://img.shields.io/badge/fuma%C3%A7a-15%2F15%20cen%C3%A1rios-brightgreen)
-![Mutantes mortos](https://img.shields.io/badge/mutantes%20mortos-92%25-brightgreen)
+![Mutantes mortos](https://img.shields.io/badge/mutantes%20mortos-90%25%2B-brightgreen)
 
 ![CI](https://github.com/LeoColman/transaction-authorizer/actions/workflows/ci.yml/badge.svg)
 ![Smoke](https://github.com/LeoColman/transaction-authorizer/actions/workflows/smoke.yml/badge.svg)
@@ -270,8 +270,11 @@ Cobertura diz que uma linha foi executada; mutação diz se algum teste **falha 
 comportamento muda**. O Pitest injeta defeitos artificiais (inverte condições, remove
 chamadas, troca retornos) e verifica se a suíte unitária os detecta.
 
-**Resultado: 102 de 111 mutantes mortos (92%), zero mutantes sem cobertura.**
-Gate de 90% no build (`mutationThreshold`). Os sobreviventes são equivalentes
+**Resultado:** pelo menos **90%** dos mutantes detectados, de 111 mutantes gerados,
+zero sem cobertura. É um piso, não uma medição pontual: parte dos mutantes morre por
+timeout, e um runner de CI com menos CPU detecta alguns a menos que uma máquina local
+(90% contra 93% nas execuções recentes) sem que a suíte tenha piorado em nada. O gate do
+build é esse mesmo 90% (`mutationThreshold`). Os sobreviventes são equivalentes
 (mutação que não muda comportamento observável) ou os guards de moeda cruzada
 inalcançáveis com um enum de uma moeda só.
 
