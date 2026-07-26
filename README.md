@@ -1,10 +1,10 @@
 # Transaction Authorizer
 
-![Cobertura total](https://img.shields.io/badge/cobertura%20total-97.2%25-brightgreen)
-![Cobertura unitários](https://img.shields.io/badge/testes%20unit%C3%A1rios-62.8%25-yellow)
-![Cobertura integração](https://img.shields.io/badge/testes%20de%20integra%C3%A7%C3%A3o-92.9%25-brightgreen)
+![Cobertura total](https://img.shields.io/badge/cobertura%20total-97.4%25-brightgreen)
+![Cobertura unitários](https://img.shields.io/badge/testes%20unit%C3%A1rios-61.5%25-yellow)
+![Cobertura integração](https://img.shields.io/badge/testes%20de%20integra%C3%A7%C3%A3o-92.3%25-brightgreen)
 ![Fumaça](https://img.shields.io/badge/fuma%C3%A7a-15%2F15%20cen%C3%A1rios-brightgreen)
-![Mutantes mortos](https://img.shields.io/badge/mutantes%20mortos-93%25-brightgreen)
+![Mutantes mortos](https://img.shields.io/badge/mutantes%20mortos-92%25-brightgreen)
 
 ![CI](https://github.com/LeoColman/transaction-authorizer/actions/workflows/ci.yml/badge.svg)
 ![Smoke](https://github.com/LeoColman/transaction-authorizer/actions/workflows/smoke.yml/badge.svg)
@@ -223,17 +223,18 @@ esteja no ar. Só `test` roda sem Docker.
 
 | Suíte | Cobertura de linhas | O que exercita |
 |---|---|---|
-| Unitários | 62,8% | Domínio, aplicação e mapeamento de DTOs — isolados com MockK |
-| Integração | 92,9% | Tudo acima + adaptadores reais: repositórios Postgres, controller, listener SQS |
-| **Total (unit + integração)** | **97,2%** | Gate de 80% no build (`koverVerify`) |
+| Unitários | 61,5% | Domínio, aplicação e mapeamento de DTOs — isolados com MockK |
+| Integração | 92,3% | Tudo acima + adaptadores reais: repositórios Postgres, controller, listener SQS |
+| **Total (unit + integração)** | **97,4%** | Gate de 80% no build (`koverVerify`) |
 
 A leitura correta dos números: na arquitetura hexagonal, adaptadores (SQL, HTTP,
 fila) são deliberadamente testados contra infraestrutura real na camada de
 integração, não com mocks na unitária. Por isso a suíte unitária cobre o núcleo de
-negócio e a de integração completa os adaptadores. Medida apenas contra os pacotes
-que são responsabilidade dela (domínio, aplicação, DTOs e listener — o mesmo escopo
-do Pitest), a suíte unitária cobre **98,6%**; os 62,8% acima incluem os adaptadores
-JDBC e web, que por decisão pertencem à integração. Fumaça e carga não medem
+negócio e a de integração completa os adaptadores. Medida apenas contra o que é
+responsabilidade dela (domínio, aplicação, DTOs, listener SQS e os filtros web — o
+mesmo escopo do Pitest, e o gate abaixo o lê de lá em vez de repetir a lista), a
+suíte unitária cobre **97,0%**; os 61,5% acima incluem os repositórios JDBC e o
+restante da camada web, que por decisão pertencem à integração. Fumaça e carga não medem
 cobertura: a aplicação roda em container separado (JVM externa ao agente).
 
 ```bash
@@ -241,10 +242,19 @@ cobertura: a aplicação roda em container separado (JVM externa ao agente).
 ./gradlew koverHtmlReport -PkoverMode=unit         # só unitários
 ./gradlew koverHtmlReport -PkoverMode=integration  # só integração
 ./gradlew koverVerify                              # falha se total < 80%
+scripts/check-numbers.sh                           # confere os números deste README
 ```
 
 Relatório em `build/reports/kover/html/index.html`. Excluídos da medição: classe de
 bootstrap e pacote `config` (wiring sem lógica), source sets de teste.
+
+**Todos os percentuais desta seção e dos badges são verificados no CI.** Eles já
+divergiram da medição quatro vezes ao longo do projeto, sempre corrigidos à mão;
+`scripts/check-numbers.sh` gera os relatórios e falha se o README prometer mais do que
+eles sustentam — ou se ficar defasado depois de uma melhoria. O escopo do "núcleo" sai
+do `targetClasses` do Pitest, não de uma lista repetida no script, que foi justamente
+como esse número se desatualizou da última vez. Os números de carga ficam de fora: eles
+dependem da máquina e não são reprodutíveis num runner compartilhado.
 
 O que resta descoberto são caminhos inalcançáveis de propósito, não lacunas de
 teste: o guard de moeda cruzada em `Money` e no replay de `AuthorizationService`
@@ -260,7 +270,7 @@ Cobertura diz que uma linha foi executada; mutação diz se algum teste **falha 
 comportamento muda**. O Pitest injeta defeitos artificiais (inverte condições, remove
 chamadas, troca retornos) e verifica se a suíte unitária os detecta.
 
-**Resultado: 103 de 111 mutantes mortos (93%), zero mutantes sem cobertura.**
+**Resultado: 102 de 111 mutantes mortos (92%), zero mutantes sem cobertura.**
 Gate de 90% no build (`mutationThreshold`). Os sobreviventes são equivalentes
 (mutação que não muda comportamento observável) ou os guards de moeda cruzada
 inalcançáveis com um enum de uma moeda só.
