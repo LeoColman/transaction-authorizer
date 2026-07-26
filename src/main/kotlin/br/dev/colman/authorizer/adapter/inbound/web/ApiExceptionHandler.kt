@@ -11,7 +11,9 @@ import org.springframework.core.NestedRuntimeException
 import org.springframework.dao.TransientDataAccessException
 import org.springframework.http.HttpHeaders
 import org.springframework.jdbc.CannotGetJdbcConnectionException
+import org.springframework.jdbc.UncategorizedSQLException
 import org.springframework.transaction.CannotCreateTransactionException
+import org.springframework.transaction.TransactionSystemException
 import org.springframework.http.HttpStatus
 import org.springframework.http.HttpStatusCode
 import org.springframework.http.ProblemDetail
@@ -117,7 +119,7 @@ class ApiExceptionHandler(
         CannotCreateTransactionException::class,
         TransientDataAccessException::class,
     )
-    fun temporariamenteIndisponivel(
+    fun serviceUnavailable(
         e: NestedRuntimeException,
         request: HttpServletRequest,
     ): ResponseEntity<ProblemDetail> {
@@ -132,6 +134,50 @@ class ApiExceptionHandler(
                     "Capacidade esgotada; tente novamente",
                 ),
             )
+    }
+
+    /**
+     * Falha no commit: o resultado é genuinamente incerto — a transação pode ter
+     * sido efetivada no banco antes de a conexão morrer. Continua sendo 500, e
+     * não 503, porque retentar às cegas moveria o dinheiro de novo.
+     *
+     * O que muda é a orientação. A resposta genérica dizia "tente novamente",
+     * que num contrato idempotente é uma armadilha: o cliente que interpreta
+     * isso como "nova tentativa, novo id" duplica a operação, já que ids
+     * diferentes são intenções diferentes. Reenviar com o MESMO
+     * `transactionId` é o que descobre o desfecho sem risco: se a transação
+     * tinha sido efetivada, o replay devolve o resultado original.
+     */
+    @ExceptionHandler(TransactionSystemException::class)
+    fun resultadoIncerto(e: TransactionSystemException, request: HttpServletRequest): ProblemDetail {
+        log.error("Falha ao concluir a transação, resultado incerto recurso={}", request.requestURI, e)
+        return problem(
+            HttpStatus.INTERNAL_SERVER_ERROR,
+            "uncertain-result",
+            "Resultado indeterminado",
+            "Não foi possível confirmar o resultado. Reenvie a mesma requisição com o mesmo " +
+                "transactionId para descobrir o desfecho: se ela foi efetivada, a resposta será a original.",
+            request,
+        )
+    }
+
+    /**
+     * Espera por lock estourada (`lock_timeout`) é saturação, igual às três
+     * acima, mas chega aqui sem categoria: o Postgres devolve SQLState 55P03 e
+     * o tradutor do Spring não conhece essa classe, então ela viraria 500 e
+     * poluiria o alarme de defeito. O cancelamento ocorre antes de qualquer
+     * escrita ser confirmada, então a retentativa é segura.
+     *
+     * Qualquer outro SQLState não categorizado continua sendo defeito.
+     */
+    @ExceptionHandler(UncategorizedSQLException::class)
+    fun sqlNaoCategorizado(
+        e: UncategorizedSQLException,
+        request: HttpServletRequest,
+    ): ResponseEntity<ProblemDetail> = if (e.sqlException?.sqlState == LOCK_NOT_AVAILABLE) {
+        serviceUnavailable(e, request)
+    } else {
+        ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(unexpected(e, request))
     }
 
     @ExceptionHandler(Exception::class)
@@ -175,5 +221,10 @@ class ApiExceptionHandler(
             this.title = title
             this.detail = detail
         }
+    }
+
+    private companion object {
+        /** `lock_not_available`: o Postgres cancelou a espera por `lock_timeout`. */
+        const val LOCK_NOT_AVAILABLE = "55P03"
     }
 }

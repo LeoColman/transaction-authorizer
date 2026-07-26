@@ -82,7 +82,9 @@ class LockTimeoutIT(
             response.body!! shouldContain "service-unavailable"
 
             // Respondeu por causa do teto, não porque o lock foi liberado antes.
-            decorrido shouldBeLessThan Duration.ofSeconds(20)
+            // A margem cobre o `lock_timeout` de 1s mais o custo do contexto; se
+            // fosse o teto de transação (3s) ou nada, passaria bem disso.
+            decorrido shouldBeLessThan Duration.ofSeconds(3)
             // Rollback antes de qualquer escrita: retentar é seguro, e é o que o 503 promete.
             accounts.currentBalance(accountId)!! shouldBe BigDecimal("100.00")
         }

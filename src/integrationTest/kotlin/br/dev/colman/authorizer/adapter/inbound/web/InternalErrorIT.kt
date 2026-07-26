@@ -10,6 +10,7 @@ import io.mockk.every
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.dao.QueryTimeoutException
 import org.springframework.transaction.CannotCreateTransactionException
+import org.springframework.transaction.TransactionSystemException
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
@@ -64,6 +65,22 @@ class InternalErrorIT : FunSpec() {
             response.statusCode shouldBe HttpStatus.SERVICE_UNAVAILABLE
             response.headers.getFirst("Retry-After") shouldBe "1"
             response.body!! shouldContain "service-unavailable"
+        }
+
+        test("falha no commit responde 500 dizendo como descobrir o desfecho real") {
+            // Resultado incerto: a transação pode ter sido efetivada antes de a
+            // conexão morrer. Continua 500 (retentar às cegas moveria dinheiro
+            // de novo), mas a orientação precisa ser o replay com o mesmo id —
+            // "tente novamente" genérico levaria o cliente a gerar id novo e
+            // duplicar a operação.
+            every { authorizeTransaction.authorize(any()) } throws
+                TransactionSystemException("Could not commit JDBC transaction")
+
+            val response = autorizar()
+
+            response.statusCode shouldBe HttpStatus.INTERNAL_SERVER_ERROR
+            response.body!! shouldContain "uncertain-result"
+            response.body!! shouldContain "mesmo transactionId"
         }
 
         test("falha transitória DENTRO da transação também responde 503, não 500") {

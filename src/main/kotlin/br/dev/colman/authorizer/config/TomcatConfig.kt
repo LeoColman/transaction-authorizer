@@ -31,10 +31,11 @@ class TomcatConfig {
             })
         }
 
-    /** ErrorReportValve que não escreve corpo algum: a resposta é só o status. */
+    /**
+     * ErrorReportValve que não escreve corpo algum: a resposta é só o status,
+     * sem página HTML e sem versão de servidor. Daí o `report` vazio.
+     */
     private class QuietErrorReportValve : ErrorReportValve() {
-        override fun report(request: Request, response: Response, throwable: Throwable?) {
-            // Sem corpo: nem página HTML, nem versão de servidor.
-        }
+        override fun report(request: Request, response: Response, throwable: Throwable?) = Unit
     }
 }

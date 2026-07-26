@@ -4,7 +4,7 @@
 ![Cobertura unitários](https://img.shields.io/badge/testes%20unit%C3%A1rios-62.8%25-yellow)
 ![Cobertura integração](https://img.shields.io/badge/testes%20de%20integra%C3%A7%C3%A3o-92.9%25-brightgreen)
 ![Fumaça](https://img.shields.io/badge/fuma%C3%A7a-15%2F15%20cen%C3%A1rios-brightgreen)
-![Mutantes mortos](https://img.shields.io/badge/mutantes%20mortos-92%25-brightgreen)
+![Mutantes mortos](https://img.shields.io/badge/mutantes%20mortos-93%25-brightgreen)
 
 ![CI](https://github.com/LeoColman/transaction-authorizer/actions/workflows/ci.yml/badge.svg)
 ![Smoke](https://github.com/LeoColman/transaction-authorizer/actions/workflows/smoke.yml/badge.svg)
@@ -74,6 +74,10 @@ Tudo isso é provado por testes de integração com concorrência real
 ## Como executar
 
 Pré-requisitos: Docker e JDK 21 (apenas para rodar testes/Gatling fora do container).
+O JDK precisa ser o 21 mesmo: é a versão exigida pelo daemon do Gradle, e o download
+automático de toolchain não cobre esse caso. As portas 8080, 5433 e 4566 precisam estar
+livres, e a primeira subida baixa dependências Go dentro do gerador de contas, então
+exige rede.
 
 ```bash
 docker compose up --build
@@ -144,7 +148,8 @@ passa por `double` em cliente nenhum e preserva a precisão integralmente.
 | Conta inexistente | 404 | Problem Details (RFC 9457) |
 | Conta desabilitada / moeda não suportada | 422 | Problem Details |
 | Mesmo `transactionId` com payload divergente | 409 | Problem Details (conflito de idempotência) |
-| Capacidade esgotada (pool de conexões, timeout) | 503 | Problem Details com `Retry-After` |
+| Capacidade esgotada (pool, timeout de consulta, espera por lock) | 503 | Problem Details com `Retry-After` |
+| Falha no commit (resultado incerto) | 500 | Problem Details orientando reenvio com o **mesmo** `transactionId` |
 | Payload inválido | 400 | Problem Details |
 
 Racional do mapeamento em [ADR-0004](docs/adr/0004-mapeamento-http.md).
@@ -159,9 +164,17 @@ explicitar porque nenhum gateway resolve sozinho: throttling, WAF e API keys aut
 *aplicação* chamadora, não decidem se aquela chamada pode movimentar aquela conta.
 
 Em produção, a identidade autenticada viria da borda (JWT ou mTLS) e a comparação com
-`owner_id` seria feita aqui, no autorizador, porque é ele quem guarda o dado. O
-`transactionId` é único no serviço inteiro e não por conta — ver as consequências disso
-em [ADR-0002](docs/adr/0002-idempotencia-e-atomicidade.md).
+`owner_id` seria feita aqui, no autorizador, porque é ele quem guarda o dado — essa
+comparação é a finalidade da coluna, e é por isso que ela é persistida mesmo sem uso
+hoje. Ela nunca sai em resposta HTTP nem em log. O `transactionId` é único no serviço
+inteiro e não por conta — ver as consequências disso em
+[ADR-0002](docs/adr/0002-idempotencia-e-atomicidade.md).
+
+Dado pessoal fica restrito ao banco e à DLQ. Os logs carregam identificadores de
+transação e de conta, nunca o do titular nem valores monetários; a mensagem de abertura
+malformada é arquivada na DLQ com o motivo, e o log guarda só o motivo. A única exceção é
+deliberada: se o arquivamento na DLQ falhar, o payload vai para o log, porque nesse ponto
+ele é a última cópia da mensagem.
 
 ## Testes
 
@@ -171,7 +184,12 @@ em [ADR-0002](docs/adr/0002-idempotencia-e-atomicidade.md).
 ./gradlew smokeTest         # fumaça contra instância real (docker compose up antes)
 ./gradlew gatlingRun        # carga (docker compose up antes)
 ./gradlew detekt            # análise estática (roda também no check/CI)
+./gradlew check             # test + integrationTest + detekt + koverVerify
 ```
+
+`check` (e portanto `build`) inclui a suíte de integração, que sobe containers pelo
+Testcontainers: o Docker precisa estar disponível, ainda que a stack do compose não
+esteja no ar. Só `test` roda sem Docker.
 
 - **Unitários**: domínio e aplicação puros, corner cases (débito exato zerando conta,
   escala > 2 casas, valor zero/negativo, corrida de idempotência, mensagem venenosa).
@@ -242,7 +260,7 @@ Cobertura diz que uma linha foi executada; mutação diz se algum teste **falha 
 comportamento muda**. O Pitest injeta defeitos artificiais (inverte condições, remove
 chamadas, troca retornos) e verifica se a suíte unitária os detecta.
 
-**Resultado: 100 de 109 mutantes mortos (92%), zero mutantes sem cobertura.**
+**Resultado: 103 de 111 mutantes mortos (93%), zero mutantes sem cobertura.**
 Gate de 90% no build (`mutationThreshold`). Os sobreviventes são equivalentes
 (mutação que não muda comportamento observável) ou os guards de moeda cruzada
 inalcançáveis com um enum de uma moeda só.

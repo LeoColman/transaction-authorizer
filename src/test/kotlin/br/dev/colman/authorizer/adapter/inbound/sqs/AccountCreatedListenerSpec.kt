@@ -72,6 +72,22 @@ class AccountCreatedListenerSpec : FunSpec({
         meterRegistry.counter("authorizer.sqs.messages.invalid").count() shouldBe 2.0
     }
 
+    test("falha ao arquivar na DLQ é contada à parte e não derruba o lote") {
+        // "Malformada" e "malformada E perdida" são eventos diferentes: sem o
+        // contador próprio, a perda definitiva ficaria invisível no painel.
+        every { registerAccounts.register(any()) } returns 1
+        every { sqsTemplate.send(any<java.util.function.Consumer<io.awspring.cloud.sqs.operations.SqsSendOptions<Any>>>()) } throws
+            IllegalStateException("fila inexistente")
+
+        val messages = listOf(payload(), "isso nem é json").map { MessageBuilder.withPayload(it).build() }
+
+        listener.onMessages(messages)
+
+        meterRegistry.counter("authorizer.sqs.messages.invalid").count() shouldBe 1.0
+        meterRegistry.counter("authorizer.sqs.dead-letter.failures").count() shouldBe 1.0
+        verify(exactly = 1) { registerAccounts.register(any()) }
+    }
+
     test("created_at absurdo é mensagem inválida, não veneno que trava o lote") {
         val captured = slot<List<NewAccount>>()
         every { registerAccounts.register(capture(captured)) } returns 1

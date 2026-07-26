@@ -14,10 +14,26 @@ spring:
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     hikari:
+      # O pool é o teto de vazão do serviço: com latência média de 3ms, 20
+      # conexões dão ~6.7k req/s, o que explica o limite de 7.4k medido em
+      # carga. Subir aqui desloca o teto, mas esbarra no max_connections do
+      # servidor Postgres — os dois precisam andar juntos.
+      #
+      # O consumidor SQS divide este mesmo pool: com lote de 10, ele usa até
+      # maxConcurrentMessages/10 conexões simultâneas (10 nos padrões atuais).
+      # Vale manter (SQS_MAX_CONCURRENT_MESSAGES / 10) + pico HTTP <= pool.
       maximum-pool-size: ${DB_POOL_MAX_SIZE:20}
       minimum-idle: 5
       connection-timeout: 3000
       validation-timeout: 2000
+      # Espera por lock falha rápido, e por um motivo de capacidade: a conexão
+      # fica retida enquanto se espera, então uma conta muito disputada (lojista,
+      # liquidação) encheria o pool e devolveria 503 para contas que não têm
+      # nada a ver com ela. Com 1s, cada requisição barrada solta a conexão três
+      # vezes mais rápido que o teto de 3s da transação, que continua valendo
+      # para consulta lenta. Também vale para o Flyway: migração que não
+      # consegue lock falha o deploy em vez de travá-lo em silêncio.
+      connection-init-sql: SET lock_timeout = '1s'
   jackson:
     default-property-inclusion: non_null
   servlet:

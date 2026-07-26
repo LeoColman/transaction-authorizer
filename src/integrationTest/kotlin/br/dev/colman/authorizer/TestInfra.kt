@@ -16,8 +16,8 @@ object TestInfra {
     const val DLQ_NAME = "conta-bancaria-criada-dlq"
 
     /** Fila só do teste de redrive: visibility curto para não esperar 30s pela reentrega. */
-    const val FALHA_QUEUE_NAME = "fila-que-sempre-falha"
-    const val FALHA_DLQ_NAME = "fila-que-sempre-falha-dlq"
+    const val FAILING_QUEUE_NAME = "fila-que-sempre-falha"
+    const val FAILING_DLQ_NAME = "fila-que-sempre-falha-dlq"
     const val MAX_RECEIVE_COUNT = 2
 
     private const val REGION = "sa-east-1"
@@ -34,10 +34,10 @@ object TestInfra {
         postgres.start()
         localstack.start()
 
-        criarFila(QUEUE_NAME)
-        criarFila(DLQ_NAME)
-        criarFila(FALHA_DLQ_NAME)
-        criarFilaComRedrive(FALHA_QUEUE_NAME, FALHA_DLQ_NAME)
+        createQueue(QUEUE_NAME)
+        createQueue(DLQ_NAME)
+        createQueue(FAILING_DLQ_NAME)
+        createQueueWithRedrive(FAILING_QUEUE_NAME, FAILING_DLQ_NAME)
 
         System.setProperty("spring.datasource.url", postgres.jdbcUrl)
         System.setProperty("spring.datasource.username", postgres.username)
@@ -48,9 +48,9 @@ object TestInfra {
         System.setProperty("spring.cloud.aws.credentials.secret-key", localstack.secretKey)
     }
 
-    private fun criarFila(nome: String, vararg atributos: String) {
+    private fun createQueue(name: String, vararg attributes: String) {
         localstack.execInContainer(
-            "awslocal", "sqs", "create-queue", "--queue-name", nome, "--region", REGION, *atributos,
+            "awslocal", "sqs", "create-queue", "--queue-name", name, "--region", REGION, *attributes,
         )
     }
 
@@ -59,23 +59,23 @@ object TestInfra {
      * produção): a fila nasce apontando para a DLQ. maxReceiveCount menor e
      * visibility de 1s só para o teste não levar 30s por tentativa.
      */
-    private fun criarFilaComRedrive(nome: String, dlq: String) {
+    private fun createQueueWithRedrive(name: String, dlq: String) {
         val arn = localstack.execInContainer(
             "awslocal", "sqs", "get-queue-attributes",
-            "--queue-url", urlDaFila(dlq),
+            "--queue-url", queueUrl(dlq),
             "--attribute-names", "QueueArn", "--region", REGION,
             "--query", "Attributes.QueueArn", "--output", "text",
         ).stdout.trim()
 
-        criarFila(
-            nome,
+        createQueue(
+            name,
             "--attributes",
             """{"VisibilityTimeout":"1","RedrivePolicy":"{\"deadLetterTargetArn\":\"$arn\",""" +
                 """\"maxReceiveCount\":\"$MAX_RECEIVE_COUNT\"}"}""",
         )
     }
 
-    private fun urlDaFila(nome: String): String = localstack.execInContainer(
-        "awslocal", "sqs", "get-queue-url", "--queue-name", nome, "--region", REGION, "--output", "text",
+    private fun queueUrl(name: String): String = localstack.execInContainer(
+        "awslocal", "sqs", "get-queue-url", "--queue-name", name, "--region", REGION, "--output", "text",
     ).stdout.trim()
 }

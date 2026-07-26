@@ -38,16 +38,16 @@ class HeadResponseFramingFilter : OncePerRequestFilter() {
             return
         }
 
-        val contador = ContagemDeCorpo(response)
-        chain.doFilter(request, contador)
+        val counter = BodySizeCounter(response)
+        chain.doFilter(request, counter)
 
         if (response.isCommitted) return
         // Handler de recurso estático já declara o tamanho real sem escrever no
         // stream (o corpo de um HEAD não vai para o socket): sobrescrever com a
         // contagem zerada anunciaria 0 byte para um bundle de megabytes.
-        val jaEnquadrada = response.getHeader(HttpHeaders.TRANSFER_ENCODING) != null ||
+        val alreadyFramed = response.getHeader(HttpHeaders.TRANSFER_ENCODING) != null ||
             response.getHeader(HttpHeaders.CONTENT_LENGTH) != null
-        if (!jaEnquadrada) response.setContentLengthLong(contador.bytesEscritos())
+        if (!alreadyFramed) response.setContentLengthLong(counter.bytesWritten())
     }
 
     /**
@@ -55,7 +55,7 @@ class HeadResponseFramingFilter : OncePerRequestFilter() {
      * conta quantos bytes teriam sido escritos. Não delega flush: comitar aqui
      * tiraria a chance de declarar o Content-Length.
      */
-    private class ContagemDeCorpo(response: HttpServletResponse) : HttpServletResponseWrapper(response) {
+    private class BodySizeCounter(response: HttpServletResponse) : HttpServletResponseWrapper(response) {
 
         private var total = 0L
         private var writer: PrintWriter? = null
@@ -82,7 +82,7 @@ class HeadResponseFramingFilter : OncePerRequestFilter() {
             writer?.flush()
         }
 
-        fun bytesEscritos(): Long {
+        fun bytesWritten(): Long {
             writer?.flush()
             return total
         }

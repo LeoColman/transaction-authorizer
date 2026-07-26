@@ -55,8 +55,12 @@ class AccountCreatedListener(
         message.toNewAccount()
     }.getOrElse { e ->
         meterRegistry.counter("authorizer.sqs.messages.invalid").increment()
-        log.error("Mensagem de abertura de conta malformada, enviando para a DLQ: {}", payload, e)
-        paraDlq(payload, e)
+        // Só o motivo: o payload traz o identificador do titular, e a cópia
+        // íntegra dele já vai para a DLQ, que é o canal com acesso restrito.
+        // Repeti-lo aqui espalharia dado pessoal para o agregador de logs, que
+        // na arquitetura proposta tem retenção e alcance bem maiores.
+        log.error("Mensagem de abertura de conta malformada, enviando para a DLQ: {}", e.message)
+        sendToDeadLetterQueue(payload, e)
         null
     }
 
@@ -65,11 +69,21 @@ class AccountCreatedListener(
      * junto seriam reprocessadas por causa de uma que já se sabe irrecuperável.
      * Perder a cópia é ruim, perder o lote é pior — e a métrica de inválidas já
      * foi contada de qualquer forma.
+     *
+     * Aqui, e só aqui, o payload vai para o log: a DLQ era a única cópia e ela
+     * falhou, então o log é o último lugar onde a mensagem ainda pode ser
+     * recuperada. Vaza dado pessoal, mas perder a mensagem inteira é pior.
      */
-    private fun paraDlq(payload: String, causa: Throwable) {
+    private fun sendToDeadLetterQueue(payload: String, causa: Throwable) {
         runCatching {
             sqsTemplate.send { to -> to.queue(deadLetterQueue).payload(payload).header(MOTIVO, "${causa.message}") }
-        }.onFailure { log.error("Falha ao enviar mensagem malformada para a DLQ {}", deadLetterQueue, it) }
+        }.onFailure {
+            // Métrica própria: "malformada" e "malformada E perdida" são eventos
+            // muito diferentes, e sem separá-los um alarme sobre mensagens
+            // inválidas não distingue arquivamento normal de perda definitiva.
+            meterRegistry.counter("authorizer.sqs.dead-letter.failures").increment()
+            log.error("Falha ao enviar para a DLQ {}, mensagem preservada no log: {}", deadLetterQueue, payload, it)
+        }
     }
 
     private companion object {

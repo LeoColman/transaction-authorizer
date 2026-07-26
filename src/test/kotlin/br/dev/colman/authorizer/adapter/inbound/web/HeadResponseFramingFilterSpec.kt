@@ -93,7 +93,7 @@ class HeadResponseFramingFilterSpec : FunSpec({
         response.getHeader(HttpHeaders.CONTENT_LENGTH) shouldBe "5"
     }
 
-    test("outros métodos passam intactos, sem o wrapper contador") {
+    test("outros métodos passam intactos, sem o wrapper que conta bytes") {
         val response = MockHttpServletResponse()
         val chain = FilterChain { _, resp -> resp.writer.write("""{"ok":true}""") }
 

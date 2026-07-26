@@ -26,7 +26,8 @@ do cliente nem do servidor, e o cliente precisa distinguir recusa de falha.
 | Corpo maior que o limite (16 KiB) | 413 | Problem Details (rejeitado ANTES de executar a autorização) |
 | Corpo grande **sem `Content-Length`** em requisição rejeitada por content-type/método/Accept | 415/405/406 | O status da rejeição, sem 413: ninguém abre o corpo, que é descartado pelo container |
 | Método/rota/content-type inválidos | 405/404/415 | Problem Details do framework |
-| Pool de conexões esgotado / timeout no banco | 503 + `Retry-After` | Problem Details |
+| Pool de conexões esgotado / timeout no banco / espera por lock | 503 + `Retry-After` | Problem Details |
+| Falha no commit (resultado incerto) | 500 | Problem Details `uncertain-result`, orientando o replay com o mesmo `transactionId` |
 
 Rejeições antes do controller têm dois níveis. O filtro de tamanho da aplicação
 (`RequestSizeLimitFilter`) roda na cadeia de servlet e responde Problem Details
@@ -63,6 +64,18 @@ da arquitetura proposta.
   terminal. Zero linhas afetadas é resultado de negócio (`FAILED` gravado, 422,
   saldo intacto), então a retentativa replica o resultado em vez de repetir a
   falha.
+- **Resultado incerto é 500, mas com instrução.** Falha no commit
+  (`TransactionSystemException`) fica fora do 503 porque a transação pode ter sido
+  efetivada: retentar às cegas moveria o dinheiro duas vezes. Só que num contrato
+  idempotente, dizer "tente novamente" sem mais nada é armadilha — o cliente gera um id
+  novo, que é uma intenção nova, e duplica a operação. A resposta manda reenviar com o
+  MESMO `transactionId`, que é a única forma segura de descobrir o desfecho: se a
+  transação tinha sido efetivada, o replay devolve o resultado original.
+- **Espera por lock estourada também é 503.** O `lock_timeout` de 1s existe por
+  capacidade: a conexão fica retida enquanto se espera, então uma conta muito disputada
+  encheria o pool e derrubaria contas sem relação com ela. O Postgres devolve SQLState
+  55P03, que o tradutor do Spring não categoriza, então o mapeamento é explícito no
+  handler — sem isso, saturação apareceria como defeito.
 - **503 separa saturação de defeito**: esgotamento de pool e timeout de consulta são
   transitórios e ocorrem antes de qualquer escrita, então a retentativa é segura e o
   cliente é informado disso (`Retry-After`). Respondê-los como 500 misturaria falta de

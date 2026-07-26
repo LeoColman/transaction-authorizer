@@ -50,7 +50,7 @@ class AuthorizationExecutor(
      * handler responde 503 com `Retry-After` — aí sim retentar é seguro. 3s é
      * cerca de 80x o p99 medido em carga (38ms a 7.4k req/s).
      */
-    @Transactional(timeout = TIMEOUT_SEGUNDOS)
+    @Transactional(timeout = TIMEOUT_SECONDS)
     fun execute(command: AuthorizeTransactionCommand): Transaction {
         val account = loadEnabledAccount(command.accountId)
 
@@ -97,6 +97,6 @@ class AuthorizationExecutor(
     )
 
     private companion object {
-        const val TIMEOUT_SEGUNDOS = 3
+        const val TIMEOUT_SECONDS = 3
     }
 }

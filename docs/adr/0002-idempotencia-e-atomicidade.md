@@ -65,6 +65,12 @@ responder o resultado original em silêncio esconderia o bug, então a resposta 
   derivados de dado público, um cliente poderia ocupar antecipadamente o id que outro
   usaria e negar-lhe a transação — o 409 estaria correto, e a operação legítima perdida
   do mesmo jeito.
+- **A imutabilidade de `transactions` é garantida pela aplicação, não pelo banco**: não
+  existe caminho de código que faça UPDATE ou DELETE ali, só INSERT e leitura. O banco
+  não impõe isso — no compose a aplicação conecta como superusuário, então uma sessão
+  `psql` reescreveria o histórico sem deixar rastro. Em produção o controle seria de
+  infraestrutura: role da aplicação com INSERT e SELECT em `transactions` e sem UPDATE
+  nem DELETE, o que transforma a disciplina de código em garantia verificável.
 - O saldo autoritativo vive no banco; a aplicação nunca calcula saldo em memória.
 - Provado por testes de integração: 50 débitos concorrentes contra saldo para 10 aprovam
   exatamente 10; N requisições concorrentes com o mesmo id debitam uma vez.

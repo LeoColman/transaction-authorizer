@@ -41,12 +41,12 @@ class RedriveToDlqIT(
                 """{"account":{"id":"$accountId","owner":"${UUID.randomUUID()}",""" +
                     """"created_at":"1634874339","status":"ENABLED"}}"""
 
-            sqsTemplate.send(TestInfra.FALHA_QUEUE_NAME, payload)
+            sqsTemplate.send(TestInfra.FAILING_QUEUE_NAME, payload)
 
             // maxReceiveCount = 2 e visibility de 1s: a mensagem é entregue,
             // falha, volta, é entregue de novo e só então o SQS a redireciona.
             await.atMost(Duration.ofSeconds(60)) untilAsserted {
-                val arquivada = sqsTemplate.receive(TestInfra.FALHA_DLQ_NAME, String::class.java).orElse(null)
+                val arquivada = sqsTemplate.receive(TestInfra.FAILING_DLQ_NAME, String::class.java).orElse(null)
                 arquivada.shouldNotBeNull()
                 // A mensagem que chega é a original, não uma cópia do listener:
                 // este caminho é do SQS, e a conta nunca chegou a ser registrada.

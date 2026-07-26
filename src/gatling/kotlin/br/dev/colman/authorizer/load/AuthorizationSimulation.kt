@@ -26,7 +26,7 @@ import java.util.UUID
  * Teste de carga do autorizador.
  *
  * Fluxo por usuário virtual: 1 crédito de funding + 20 operações misturadas
- * (70% débito, 30% crédito) em contas sorteadas, aproximando o padrão real de
+ * (2/3 débito, 1/3 crédito) em contas sorteadas, aproximando o padrão real de
  * uso onde débitos recusados (422) são resultado legítimo.
  *
  * Knobs por variável de ambiente:
