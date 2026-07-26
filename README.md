@@ -4,7 +4,7 @@
 ![Cobertura unitários](https://img.shields.io/badge/testes%20unit%C3%A1rios-62.8%25-yellow)
 ![Cobertura integração](https://img.shields.io/badge/testes%20de%20integra%C3%A7%C3%A3o-92.9%25-brightgreen)
 ![Fumaça](https://img.shields.io/badge/fuma%C3%A7a-15%2F15%20cen%C3%A1rios-brightgreen)
-![Mutantes mortos](https://img.shields.io/badge/mutantes%20mortos-97%25-brightgreen)
+![Mutantes mortos](https://img.shields.io/badge/mutantes%20mortos-92%25-brightgreen)
 
 ![CI](https://github.com/LeoColman/transaction-authorizer/actions/workflows/ci.yml/badge.svg)
 ![Smoke](https://github.com/LeoColman/transaction-authorizer/actions/workflows/smoke.yml/badge.svg)
@@ -149,6 +149,20 @@ passa por `double` em cliente nenhum e preserva a precisão integralmente.
 
 Racional do mapeamento em [ADR-0004](docs/adr/0004-mapeamento-http.md).
 
+### Modelo de confiança
+
+O contrato do desafio não carrega identidade do chamador, então **o serviço não autentica
+ninguém e não verifica posse da conta**: quem chama decide o que acontece com qualquer
+`accountId` que conheça. A conta guarda `owner_id`, que hoje é apenas persistido — não
+existe com quem compará-lo. Isso é consequência do escopo, não descuido, mas vale
+explicitar porque nenhum gateway resolve sozinho: throttling, WAF e API keys autenticam a
+*aplicação* chamadora, não decidem se aquela chamada pode movimentar aquela conta.
+
+Em produção, a identidade autenticada viria da borda (JWT ou mTLS) e a comparação com
+`owner_id` seria feita aqui, no autorizador, porque é ele quem guarda o dado. O
+`transactionId` é único no serviço inteiro e não por conta — ver as consequências disso
+em [ADR-0002](docs/adr/0002-idempotencia-e-atomicidade.md).
+
 ## Testes
 
 ```bash
@@ -246,12 +260,35 @@ inalcançáveis com um enum de uma moeda só.
   `setReadListener`, `setWriteListener`), que são delegações puras nunca chamadas pelo
   MVC bloqueante.
 - Sobreviventes conhecidos: o guard `requireSameCurrency` de `Money`, impossível de
-  disparar com uma moeda só no enum (ADR-0003), mantido para a evolução multi-moeda; e
+  disparar com uma moeda só no enum (ADR-0003) — e note que ele protege a aritmética de
+  `Money`, que o fluxo de autorização nem usa, já que o saldo é alterado por UPDATE no
+  banco; multi-moeda exigiria uma verificação nova, não a reativação desta; e
   mutações equivalentes nos contadores de bytes dos filtros, que trocam o valor sem
   mudar nada observável.
 - Ampliar o alvo aos filtros valeu a pena de imediato: expôs que
   `RequestSizeLimitFilter` criava um contador novo a cada `getInputStream()`, o que
   zerava a contagem e deixava passar corpo ilimitado lido em pedaços.
+
+## Operação
+
+O que olhar primeiro em cada sintoma. Escrito depois de exercitar os cenários contra a
+stack real e anotar onde faltava informação.
+
+| Sintoma | Onde olhar |
+|---|---|
+| 5xx subiu | O status separa a causa: **503** é saturação (pool cheio, timeout de query/lock) e sai como `WARN` com o recurso; **500** é defeito e sai como `ERROR` com stack trace e recurso. `hikaricp_connections_pending` confirma saturação de pool. |
+| "Minha transação sumiu" | Se foi avaliada, há uma linha em `transactions` e o log `Autorização concluída transactionId=...`. Se não foi, a recusa aparece em `authorizer_requests_rejected_total{reason}` e no log `Requisição recusada reason=... recurso=...` — 404, 409 e conta desabilitada não gravam no banco, e é esse par que conta a história. |
+| Pico de 422 | `authorizer_requests_rejected_total{reason="account-disabled"}` separa conta bloqueada de recusa por saldo, que é `authorizer_transactions_total{status="FAILED"}`. Os dois respondem 422 e sem a tag seriam o mesmo alarme. |
+| Fila crescendo | `authorizer_accounts_registered_total` parou de subir? O consumo parou. Lag aproximado: `SELECT now() - max(registered_at) FROM accounts`. Não há health indicator do consumidor SQS (ver limitação abaixo). |
+| Mensagens na DLQ | O atributo `x-authorizer-motivo` distingue as duas origens: se **existe**, a mensagem é malformada e foi arquivada pela aplicação (o valor é o erro de parse); se **não existe**, chegou por redrive do SQS após `maxReceiveCount` falhas de infraestrutura, e `ApproximateReceiveCount` confirma. |
+| Saldo suspeito | `transactions.balance_after` é imutável: reconcilie com `SELECT balance, SUM(CASE WHEN type='CREDIT' AND status='SUCCEEDED' THEN amount WHEN type='DEBIT' AND status='SUCCEEDED' THEN -amount ELSE 0 END) ...` agrupando por conta. |
+| Latência piorou | `http_server_requests_seconds` tem histograma de percentis por rota e status. Compare com `hikaricp_connections_acquire_seconds` (pool) e `jvm_gc_pause_seconds` (GC) para atribuir a causa. |
+
+**Limitação conhecida**: não existe health indicator nem métrica de lag do consumidor SQS —
+se o listener morrer, `/actuator/health` continua UP e o único sinal é a métrica de contas
+registradas parar de crescer. Os probes `readiness`/`liveness` cobrem banco e processo, não
+a fila. Fechar isso exige um indicador próprio sobre o registro de containers do
+spring-cloud-aws, e ficou fora desta versão.
 
 ## Decisões de arquitetura (ADRs)
 

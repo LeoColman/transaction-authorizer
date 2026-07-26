@@ -36,7 +36,21 @@ class AuthorizationExecutor(
     private val clock: Clock,
 ) {
 
-    @Transactional
+    /**
+     * O `timeout` limita a EXECUÇÃO, coisa que nenhuma outra camada faz: o
+     * `connection-timeout` do Hikari limita só a espera por uma conexão do pool.
+     * Sem ele, uma linha travada por outra sessão prende a requisição por tempo
+     * indeterminado — e o desfecho é o pior possível: o chamador estoura o
+     * próprio timeout e desiste, a transação conclui depois em silêncio, e a
+     * retentativa (com id novo, porque o cliente nunca soube o resultado) move o
+     * dinheiro de novo. A idempotência não cobre isso: ela protege o mesmo
+     * `transactionId`, não uma segunda tentativa legítima do cliente.
+     *
+     * Com o teto, a espera vira erro transitório antes de qualquer escrita, e o
+     * handler responde 503 com `Retry-After` — aí sim retentar é seguro. 3s é
+     * cerca de 80x o p99 medido em carga (38ms a 7.4k req/s).
+     */
+    @Transactional(timeout = TIMEOUT_SEGUNDOS)
     fun execute(command: AuthorizeTransactionCommand): Transaction {
         val account = loadEnabledAccount(command.accountId)
 
@@ -81,4 +95,8 @@ class AuthorizationExecutor(
         // Garante que o replay idempotente devolva timestamp idêntico ao original.
         timestamp = clock.instant().truncatedTo(ChronoUnit.MICROS),
     )
+
+    private companion object {
+        const val TIMEOUT_SEGUNDOS = 3
+    }
 }

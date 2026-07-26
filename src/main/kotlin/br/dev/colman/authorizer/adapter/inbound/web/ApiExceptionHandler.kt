@@ -4,6 +4,8 @@ import br.dev.colman.authorizer.domain.AccountDisabledException
 import br.dev.colman.authorizer.domain.AccountNotFoundException
 import br.dev.colman.authorizer.domain.IdempotencyConflictException
 import br.dev.colman.authorizer.domain.UnsupportedCurrencyException
+import io.micrometer.core.instrument.MeterRegistry
+import jakarta.servlet.http.HttpServletRequest
 import org.slf4j.LoggerFactory
 import org.springframework.core.NestedRuntimeException
 import org.springframework.dao.TransientDataAccessException
@@ -34,29 +36,37 @@ import java.net.URI
  * o status HTTP nativo (405/404/415) em vez de caírem no tratador de 500.
  */
 @RestControllerAdvice
-class ApiExceptionHandler : ResponseEntityExceptionHandler() {
+class ApiExceptionHandler(
+    private val meterRegistry: MeterRegistry,
+) : ResponseEntityExceptionHandler() {
 
     private val log = LoggerFactory.getLogger(javaClass)
 
     @ExceptionHandler(AccountNotFoundException::class)
-    fun accountNotFound(e: AccountNotFoundException): ProblemDetail =
-        problem(HttpStatus.NOT_FOUND, "account-not-found", "Conta não encontrada", e.message)
+    fun accountNotFound(e: AccountNotFoundException, request: HttpServletRequest): ProblemDetail =
+        problem(HttpStatus.NOT_FOUND, "account-not-found", "Conta não encontrada", e.message, request)
 
     @ExceptionHandler(AccountDisabledException::class)
-    fun accountDisabled(e: AccountDisabledException): ProblemDetail =
-        problem(HttpStatus.UNPROCESSABLE_CONTENT, "account-disabled", "Conta desabilitada", e.message)
+    fun accountDisabled(e: AccountDisabledException, request: HttpServletRequest): ProblemDetail =
+        problem(HttpStatus.UNPROCESSABLE_CONTENT, "account-disabled", "Conta desabilitada", e.message, request)
 
     @ExceptionHandler(UnsupportedCurrencyException::class)
-    fun unsupportedCurrency(e: UnsupportedCurrencyException): ProblemDetail =
-        problem(HttpStatus.UNPROCESSABLE_CONTENT, "unsupported-currency", "Moeda não suportada", e.message)
+    fun unsupportedCurrency(e: UnsupportedCurrencyException, request: HttpServletRequest): ProblemDetail =
+        problem(HttpStatus.UNPROCESSABLE_CONTENT, "unsupported-currency", "Moeda não suportada", e.message, request)
 
     @ExceptionHandler(IdempotencyConflictException::class)
-    fun idempotencyConflict(e: IdempotencyConflictException): ProblemDetail =
-        problem(HttpStatus.CONFLICT, "idempotency-conflict", "Conflito de idempotência", e.message)
+    fun idempotencyConflict(e: IdempotencyConflictException, request: HttpServletRequest): ProblemDetail =
+        problem(HttpStatus.CONFLICT, "idempotency-conflict", "Conflito de idempotência", e.message, request)
 
     @ExceptionHandler(MethodArgumentTypeMismatchException::class)
-    fun invalidPathVariable(e: MethodArgumentTypeMismatchException): ProblemDetail =
-        problem(HttpStatus.BAD_REQUEST, "invalid-request", "Parâmetro inválido", "${e.name} não é um valor válido")
+    fun invalidPathVariable(e: MethodArgumentTypeMismatchException, request: HttpServletRequest): ProblemDetail =
+        problem(
+            HttpStatus.BAD_REQUEST,
+            "invalid-request",
+            "Parâmetro inválido",
+            "${e.name} não é um valor válido",
+            request,
+        )
 
     override fun handleMethodArgumentNotValid(
         e: MethodArgumentNotValidException,
@@ -107,8 +117,11 @@ class ApiExceptionHandler : ResponseEntityExceptionHandler() {
         CannotCreateTransactionException::class,
         TransientDataAccessException::class,
     )
-    fun temporariamenteIndisponivel(e: NestedRuntimeException): ResponseEntity<ProblemDetail> {
-        log.warn("Capacidade esgotada ao acessar o banco: {}", e.message)
+    fun temporariamenteIndisponivel(
+        e: NestedRuntimeException,
+        request: HttpServletRequest,
+    ): ResponseEntity<ProblemDetail> {
+        log.warn("Capacidade esgotada ao acessar o banco recurso={}: {}", request.requestURI, e.message)
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
             .header(HttpHeaders.RETRY_AFTER, "1")
             .body(
@@ -122,8 +135,10 @@ class ApiExceptionHandler : ResponseEntityExceptionHandler() {
     }
 
     @ExceptionHandler(Exception::class)
-    fun unexpected(e: Exception): ProblemDetail {
-        log.error("Erro inesperado ao processar requisição", e)
+    fun unexpected(e: Exception, request: HttpServletRequest): ProblemDetail {
+        // O recurso no log é o que liga o stack trace à transação que o cliente
+        // reclamou; sem ele, um 500 é um stack trace órfão.
+        log.error("Erro inesperado ao processar requisição recurso={}", request.requestURI, e)
         return problem(HttpStatus.INTERNAL_SERVER_ERROR, "internal-error", "Erro interno", "Erro inesperado; tente novamente")
     }
 
@@ -131,10 +146,34 @@ class ApiExceptionHandler : ResponseEntityExceptionHandler() {
         .status(HttpStatus.BAD_REQUEST)
         .body(problem(HttpStatus.BAD_REQUEST, "invalid-request", "Payload inválido", detail))
 
-    private fun problem(status: HttpStatus, type: String, title: String, detail: String?): ProblemDetail =
-        ProblemDetail.forStatus(status).apply {
+    /**
+     * Toda recusa deixa rastro: contador com o motivo e uma linha de log com o
+     * recurso. Sem isso, os únicos desfechos observáveis do serviço eram sucesso,
+     * recusa por saldo e 5xx — quem perguntasse "o que aconteceu com a transação
+     * X?" para um 404, 409 ou conta desabilitada não teria onde olhar, porque
+     * esses caminhos também não gravam nada no banco.
+     *
+     * O motivo entra como TAG, não no nome da métrica: é o que separa recusa de
+     * negócio (saldo) de conta desabilitada, que hoje compartilham o mesmo 422 e
+     * seriam indistinguíveis num alarme.
+     */
+    private fun problem(
+        status: HttpStatus,
+        type: String,
+        title: String,
+        detail: String?,
+        request: HttpServletRequest? = null,
+    ): ProblemDetail {
+        meterRegistry.counter("authorizer.requests.rejected", "reason", type, "status", status.value().toString())
+            .increment()
+        // O recurso já identifica a transação; o detalhe fica de fora do log por
+        // poder conter eco do payload do cliente.
+        if (request != null) log.info("Requisição recusada reason={} status={} recurso={}", type, status.value(), request.requestURI)
+
+        return ProblemDetail.forStatus(status).apply {
             this.type = URI.create("https://transaction-authorizer/errors/$type")
             this.title = title
             this.detail = detail
         }
+    }
 }

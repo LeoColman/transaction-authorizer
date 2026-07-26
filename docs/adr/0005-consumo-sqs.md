@@ -38,6 +38,10 @@ travar em mensagem venenosa.
   verde. Fail-fast transforma erro de configuração em falha visível de deploy. O perfil
   `local` mantém CREATE por conveniência com LocalStack.
 
+- **A origem da mensagem na DLQ é distinguível na triagem**: as arquivadas pela aplicação
+  (malformadas) carregam o atributo `x-authorizer-motivo` com o erro de parse; as que
+  chegaram por redrive não têm o atributo e trazem `ApproximateReceiveCount` no limite.
+  Sem essa marca, as duas seriam indistinguíveis e a triagem começaria por adivinhação.
 - **DLQ com `maxReceiveCount: 5`**, provisionada junto com a fila. A política de redrive
   é atributo da FILA, não da aplicação: no compose ela nasce no hook de inicialização do
   LocalStack (`localstack/init-queues.sh`), e em produção viria do IaC. Provisionar

@@ -57,6 +57,14 @@ responder o resultado original em silêncio esconderia o bug, então a resposta 
 
 ## Consequências
 
+- O `transactionId` é único no serviço inteiro, não por conta: ele identifica o recurso no
+  path (`POST /transactions/{transactionId}`), então o mesmo id não pode designar
+  transações diferentes em contas diferentes. A consequência prática é que um id já
+  gravado responde 409 para qualquer outra conta, e por isso quem gera os ids precisa de
+  valores imprevisíveis (UUID aleatório, como o contrato define). Com ids sequenciais ou
+  derivados de dado público, um cliente poderia ocupar antecipadamente o id que outro
+  usaria e negar-lhe a transação — o 409 estaria correto, e a operação legítima perdida
+  do mesmo jeito.
 - O saldo autoritativo vive no banco; a aplicação nunca calcula saldo em memória.
 - Provado por testes de integração: 50 débitos concorrentes contra saldo para 10 aprovam
   exatamente 10; N requisições concorrentes com o mesmo id debitam uma vez.

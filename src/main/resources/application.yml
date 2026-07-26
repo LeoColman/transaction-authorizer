@@ -61,9 +61,29 @@ management:
       # Sem detalhes de infraestrutura para chamadores anônimos; probes e
       # healthchecks só precisam do status agregado.
       show-details: when-authorized
+      group:
+        # Por padrão o grupo readiness só olha o estado de ciclo de vida do
+        # Spring: com o banco fora, o probe continuaria verde e o balanceador
+        # seguiria mandando tráfego para uma instância que só sabe responder
+        # 503. Readiness é "posso receber tráfego", e sem banco não posso.
+        readiness:
+          include: readinessState,db
+        # Liveness fica só com o estado do processo, de propósito: banco fora é
+        # motivo para parar de receber tráfego, não para o orquestrador matar e
+        # recriar a instância em laço enquanto a dependência não volta.
+        liveness:
+          include: livenessState
   metrics:
     tags:
       application: ${spring.application.name}
+    distribution:
+      # Sem isto, as métricas de latência só expõem contagem, soma e um máximo
+      # decadente — dá para calcular média, não percentil. O p99 que o README
+      # cita seria impossível de verificar em produção com o que era exposto.
+      percentiles-histogram:
+        http.server.requests: true
+      slo:
+        http.server.requests: 5ms,25ms,100ms,500ms
 
 springdoc:
   swagger-ui:

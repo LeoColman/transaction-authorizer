@@ -69,6 +69,11 @@ class AuthorizationFlowIT(
         .tags("type", type, "status", status, "replayed", replayed)
         .counter()?.count() ?: 0.0
 
+    private fun contadorRecusa(reason: String): Double = meterRegistry
+        .find("authorizer.requests.rejected")
+        .tags("reason", reason)
+        .counter()?.count() ?: 0.0
+
     init {
         test("crédito em conta nova é aprovado com 200 e resposta no contrato do desafio") {
             val accountId = createAccount()
@@ -134,6 +139,29 @@ class AuthorizationFlowIT(
             val recusados = contador("DEBIT", "FAILED", "false")
             post(UUID.randomUUID(), body(accountId, "DEBIT", "9999.00"))
             contador("DEBIT", "FAILED", "false") shouldBe recusados + 1
+        }
+
+        test("recusa que não grava transação ainda assim deixa rastro contável") {
+            // 404 e 409 não gravam linha nenhuma: sem esta métrica, quem
+            // perguntasse "o que houve com a transação X?" não teria onde olhar.
+            val inexistente = contadorRecusa("account-not-found")
+            post(UUID.randomUUID(), body(UUID.randomUUID(), "CREDIT", "10.00"))
+            contadorRecusa("account-not-found") shouldBe inexistente + 1
+
+            val accountId = createAccount()
+            val transactionId = UUID.randomUUID()
+            post(transactionId, body(accountId, "CREDIT", "10.00"))
+
+            val conflitos = contadorRecusa("idempotency-conflict")
+            post(transactionId, body(accountId, "CREDIT", "99.00"))
+            contadorRecusa("idempotency-conflict") shouldBe conflitos + 1
+
+            // Conta desabilitada e recusa por saldo compartilham o 422: só a tag
+            // de motivo separa uma da outra num alarme.
+            val desabilitada = createAccount(AccountStatus.DISABLED)
+            val bloqueios = contadorRecusa("account-disabled")
+            post(UUID.randomUUID(), body(desabilitada, "DEBIT", "1.00"))
+            contadorRecusa("account-disabled") shouldBe bloqueios + 1
         }
 
         test("débito do valor exato do saldo zera a conta") {
