@@ -1,8 +1,8 @@
 # Transaction Authorizer
 
-![Cobertura total](https://img.shields.io/badge/cobertura%20total-97.4%25-brightgreen)
-![Cobertura unitários](https://img.shields.io/badge/testes%20unit%C3%A1rios-61.5%25-yellow)
-![Cobertura integração](https://img.shields.io/badge/testes%20de%20integra%C3%A7%C3%A3o-92.3%25-brightgreen)
+![Cobertura total](https://img.shields.io/badge/cobertura%20total-97.5%25-brightgreen)
+![Cobertura unitários](https://img.shields.io/badge/testes%20unit%C3%A1rios-62.8%25-yellow)
+![Cobertura integração](https://img.shields.io/badge/testes%20de%20integra%C3%A7%C3%A3o-91.4%25-brightgreen)
 ![Fumaça](https://img.shields.io/badge/fuma%C3%A7a-15%2F15%20cen%C3%A1rios-brightgreen)
 ![Mutantes mortos](https://img.shields.io/badge/mutantes%20mortos-90%25%2B-brightgreen)
 
@@ -68,8 +68,10 @@ flowchart LR
   por infraestrutura volta para a fila e, após `maxReceiveCount`, é movida pelo redrive
   do próprio SQS ([ADR-0005](docs/adr/0005-consumo-sqs.md)).
 
-Tudo isso é provado por testes de integração com concorrência real
-(50 débitos simultâneos, corrida de idempotência, redelivery, e os dois caminhos até a DLQ).
+Tudo isso é provado por testes de integração com concorrência real (50 débitos simultâneos,
+corrida de idempotência, redelivery, os dois caminhos até a DLQ) e por um teste de caos que
+derruba todas as conexões do banco e exige que o serviço volte sozinho, sem responder 500 no
+caminho.
 
 ## Como executar
 
@@ -228,9 +230,9 @@ esteja no ar. Só `test` roda sem Docker.
 
 | Suíte | Cobertura de linhas | O que exercita |
 |---|---|---|
-| Unitários | 61,5% | Domínio, aplicação e mapeamento de DTOs — isolados com MockK |
-| Integração | 92,3% | Tudo acima + adaptadores reais: repositórios Postgres, controller, listener SQS |
-| **Total (unit + integração)** | **97,4%** | Gate de 80% no build (`koverVerify`) |
+| Unitários | 62,8% | Domínio, aplicação e mapeamento de DTOs — isolados com MockK |
+| Integração | 91,4% | Tudo acima + adaptadores reais: repositórios Postgres, controller, listener SQS |
+| **Total (unit + integração)** | **97,5%** | Gate de 80% no build (`koverVerify`) |
 
 A leitura correta dos números: na arquitetura hexagonal, adaptadores (SQL, HTTP,
 fila) são deliberadamente testados contra infraestrutura real na camada de
@@ -238,7 +240,7 @@ integração, não com mocks na unitária. Por isso a suíte unitária cobre o n
 negócio e a de integração completa os adaptadores. Medida apenas contra o que é
 responsabilidade dela (domínio, aplicação, DTOs, listener SQS e os filtros web — o
 mesmo escopo do Pitest, e o gate abaixo o lê de lá em vez de repetir a lista), a
-suíte unitária cobre **97,0%**; os 61,5% acima incluem os repositórios JDBC e o
+suíte unitária cobre **97,2%**; os 62,8% acima incluem os repositórios JDBC e o
 restante da camada web, que por decisão pertencem à integração. Fumaça e carga não medem
 cobertura: a aplicação roda em container separado (JVM externa ao agente).
 
@@ -275,7 +277,7 @@ Cobertura diz que uma linha foi executada; mutação diz se algum teste **falha 
 comportamento muda**. O Pitest injeta defeitos artificiais (inverte condições, remove
 chamadas, troca retornos) e verifica se a suíte unitária os detecta.
 
-**Resultado:** pelo menos **90%** dos mutantes detectados, de 111 mutantes gerados,
+**Resultado:** pelo menos **90%** dos mutantes detectados, de 115 mutantes gerados,
 zero sem cobertura. É um piso, não uma medição pontual: parte dos mutantes morre por
 timeout, e um runner de CI com menos CPU detecta alguns a menos que uma máquina local
 (90% contra 93% nas execuções recentes) sem que a suíte tenha piorado em nada. O gate do
@@ -315,16 +317,21 @@ stack real e anotar onde faltava informação.
 | 5xx subiu | O status separa a causa: **503** é saturação (pool cheio, timeout de query/lock) e sai como `WARN` com o recurso; **500** é defeito e sai como `ERROR` com stack trace e recurso. `hikaricp_connections_pending` confirma saturação de pool. |
 | "Minha transação sumiu" | Se foi avaliada, há uma linha em `transactions` e o log `Autorização concluída transactionId=...`. Se não foi, a recusa aparece em `authorizer_requests_rejected_total{reason}` e no log `Requisição recusada reason=... recurso=...` — 404, 409 e conta desabilitada não gravam no banco, e é esse par que conta a história. |
 | Pico de 422 | `authorizer_requests_rejected_total{reason="account-disabled"}` separa conta bloqueada de recusa por saldo, que é `authorizer_transactions_total{status="FAILED"}`. Os dois respondem 422 e sem a tag seriam o mesmo alarme. |
-| Fila crescendo | `authorizer_accounts_registered_total` parou de subir? O consumo parou. Lag aproximado: `SELECT now() - max(registered_at) FROM accounts`. Não há health indicator do consumidor SQS (ver limitação abaixo). |
+| Fila crescendo | `/actuator/health` mostra o componente `sqsListener`: DOWN quer dizer que o consumidor parou. Se estiver UP e a fila crescendo, é lentidão, não morte — lag aproximado por `SELECT now() - max(registered_at) FROM accounts`. |
 | Mensagens na DLQ | O atributo `x-authorizer-motivo` distingue as duas origens: se **existe**, a mensagem é malformada e foi arquivada pela aplicação (o valor é o erro de parse); se **não existe**, chegou por redrive do SQS após `maxReceiveCount` falhas de infraestrutura, e `ApproximateReceiveCount` confirma. |
 | Saldo suspeito | `transactions.balance_after` é imutável: reconcilie com `SELECT balance, SUM(CASE WHEN type='CREDIT' AND status='SUCCEEDED' THEN amount WHEN type='DEBIT' AND status='SUCCEEDED' THEN -amount ELSE 0 END) ...` agrupando por conta. |
 | Latência piorou | `http_server_requests_seconds` tem histograma de percentis por rota e status. Compare com `hikaricp_connections_acquire_seconds` (pool) e `jvm_gc_pause_seconds` (GC) para atribuir a causa. |
 
-**Limitação conhecida**: não existe health indicator nem métrica de lag do consumidor SQS —
-se o listener morrer, `/actuator/health` continua UP e o único sinal é a métrica de contas
-registradas parar de crescer. Os probes `readiness`/`liveness` cobrem banco e processo, não
-a fila. Fechar isso exige um indicador próprio sobre o registro de containers do
-spring-cloud-aws, e ficou fora desta versão.
+O componente `sqsListener` do health reporta DOWN se algum container de escuta parar, ou se
+nenhum tiver sido registrado — antes disso, um listener morto deixava o serviço verde e o
+único indício era uma métrica parar de crescer. Ele fica **fora** do grupo `readiness` de
+propósito: autorizar transações não depende da fila, e tirar a instância do balanceador
+porque o consumo parou trocaria degradação parcial por indisponibilidade total. O sinal
+serve para alarme, não para roteamento.
+
+**Limitação conhecida**: não há métrica de lag da fila (idade da mensagem mais antiga). O
+proxy é a consulta de `registered_at` acima; em produção viria do próprio SQS via
+CloudWatch.
 
 ## Decisões de arquitetura (ADRs)
 

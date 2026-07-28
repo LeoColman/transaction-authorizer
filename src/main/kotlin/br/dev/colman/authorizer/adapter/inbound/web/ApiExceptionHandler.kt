@@ -8,9 +8,9 @@ import io.micrometer.core.instrument.MeterRegistry
 import jakarta.servlet.http.HttpServletRequest
 import org.slf4j.LoggerFactory
 import org.springframework.core.NestedRuntimeException
+import org.springframework.dao.DataAccessResourceFailureException
 import org.springframework.dao.TransientDataAccessException
 import org.springframework.http.HttpHeaders
-import org.springframework.jdbc.CannotGetJdbcConnectionException
 import org.springframework.jdbc.UncategorizedSQLException
 import org.springframework.transaction.CannotCreateTransactionException
 import org.springframework.transaction.TransactionSystemException
@@ -106,16 +106,20 @@ class ApiExceptionHandler(
      * consulta) não é defeito: 503 diz ao cliente que a retentativa é válida e
      * separa saturação de bug nos alarmes de 5xx.
      *
-     * As três exceções cobrem os pontos onde a saturação aparece e o dinheiro
-     * ainda não se moveu: leitura fora de transação (o fast-path de replay),
-     * abertura da transação (`CannotCreateTransactionException`, o caminho mais
-     * comum aqui) e falha transitória dentro dela, que sofre rollback antes do
-     * commit. Falha no próprio commit é `TransactionSystemException`, fora desta
-     * lista de propósito: ali o resultado é incerto e sugerir retentativa seria
-     * irresponsável.
+     * As exceções cobrem os pontos onde a indisponibilidade aparece e o dinheiro
+     * ainda não se moveu: falha ao obter ou usar a conexão
+     * (`DataAccessResourceFailureException`, que engloba tanto o pool esgotado no
+     * fast-path quanto a conexão derrubada pelo servidor e devolvida morta pelo
+     * pool), abertura da transação (`CannotCreateTransactionException`, o caminho
+     * mais comum aqui) e falha transitória dentro dela. Todas sofrem rollback
+     * antes do commit, então a retentativa é segura.
+     *
+     * Falha no próprio commit é `TransactionSystemException`, fora desta lista de
+     * propósito: ali o resultado é incerto e sugerir retentativa seria
+     * irresponsável — ver o handler dedicado acima.
      */
     @ExceptionHandler(
-        CannotGetJdbcConnectionException::class,
+        DataAccessResourceFailureException::class,
         CannotCreateTransactionException::class,
         TransientDataAccessException::class,
     )

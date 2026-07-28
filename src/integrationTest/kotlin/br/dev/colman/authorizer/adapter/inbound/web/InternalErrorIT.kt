@@ -8,6 +8,7 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import io.mockk.every
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.dao.DataAccessResourceFailureException
 import org.springframework.dao.QueryTimeoutException
 import org.springframework.transaction.CannotCreateTransactionException
 import org.springframework.transaction.TransactionSystemException
@@ -55,7 +56,7 @@ class InternalErrorIT : FunSpec() {
         test("falha ao ABRIR a transação também responde 503, não 500") {
             // Saturação dentro de um @Transactional chega como
             // CannotCreateTransactionException, de hierarquia diferente da
-            // CannotGetJdbcConnectionException do fast-path — é o caminho da
+            // DataAccessResourceFailureException do fast-path — é o caminho da
             // maioria do tráfego e precisa do mesmo tratamento.
             every { authorizeTransaction.authorize(any()) } throws
                 CannotCreateTransactionException("Could not open JDBC Connection for transaction")
@@ -81,6 +82,24 @@ class InternalErrorIT : FunSpec() {
             response.statusCode shouldBe HttpStatus.INTERNAL_SERVER_ERROR
             response.body!! shouldContain "uncertain-result"
             response.body!! shouldContain "mesmo transactionId"
+        }
+
+        test("conexão derrubada pelo banco responde 503, não 500") {
+            // Failover de RDS, restart do servidor ou pg_terminate_backend deixam
+            // o pool com conexões mortas; ao usá-las, o Spring traduz para
+            // DataAccessResourceFailureException. É indisponibilidade transitória,
+            // detectada antes de qualquer escrita — o cliente precisa saber que
+            // pode retentar. O DatabaseRecoveryIT prova a recuperação de verdade,
+            // mas não garante o status: lá o pool às vezes renova a conexão antes
+            // da requisição chegar, e o 500 não chega a aparecer.
+            every { authorizeTransaction.authorize(any()) } throws
+                DataAccessResourceFailureException("This connection has been closed")
+
+            val response = autorizar()
+
+            response.statusCode shouldBe HttpStatus.SERVICE_UNAVAILABLE
+            response.headers.getFirst("Retry-After") shouldBe "1"
+            response.body!! shouldContain "service-unavailable"
         }
 
         test("falha transitória DENTRO da transação também responde 503, não 500") {
