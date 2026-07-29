@@ -89,6 +89,13 @@ management:
         # recriar a instância em laço enquanto a dependência não volta.
         liveness:
           include: livenessState
+        # Grupo só para o consumo da fila. Sem ele, o alarme veria o /health
+        # agregado cair sem saber se foi banco ou fila: `show-details` esconde o
+        # detalhe por componente de chamador anônimo, e sem Spring Security no
+        # classpath ninguém jamais é "autorizado". Um grupo tem status próprio e
+        # continua sem revelar detalhe de infraestrutura.
+        sqs:
+          include: sqsListener
   metrics:
     tags:
       application: ${spring.application.name}

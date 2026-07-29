@@ -317,17 +317,22 @@ stack real e anotar onde faltava informação.
 | 5xx subiu | O status separa a causa: **503** é saturação (pool cheio, timeout de query/lock) e sai como `WARN` com o recurso; **500** é defeito e sai como `ERROR` com stack trace e recurso. `hikaricp_connections_pending` confirma saturação de pool. |
 | "Minha transação sumiu" | Se foi avaliada, há uma linha em `transactions` e o log `Autorização concluída transactionId=...`. Se não foi, a recusa aparece em `authorizer_requests_rejected_total{reason}` e no log `Requisição recusada reason=... recurso=...` — 404, 409 e conta desabilitada não gravam no banco, e é esse par que conta a história. |
 | Pico de 422 | `authorizer_requests_rejected_total{reason="account-disabled"}` separa conta bloqueada de recusa por saldo, que é `authorizer_transactions_total{status="FAILED"}`. Os dois respondem 422 e sem a tag seriam o mesmo alarme. |
-| Fila crescendo | `/actuator/health` mostra o componente `sqsListener`: DOWN quer dizer que o consumidor parou. Se estiver UP e a fila crescendo, é lentidão, não morte — lag aproximado por `SELECT now() - max(registered_at) FROM accounts`. |
+| Fila crescendo | `/actuator/health/sqs` responde só pelo consumo: DOWN quer dizer que o listener parou. Se estiver UP e a fila crescendo, é lentidão, não morte — lag aproximado por `SELECT now() - max(registered_at) FROM accounts`. |
 | Mensagens na DLQ | O atributo `x-authorizer-motivo` distingue as duas origens: se **existe**, a mensagem é malformada e foi arquivada pela aplicação (o valor é o erro de parse); se **não existe**, chegou por redrive do SQS após `maxReceiveCount` falhas de infraestrutura, e `ApproximateReceiveCount` confirma. |
 | Saldo suspeito | `transactions.balance_after` é imutável: reconcilie com `SELECT balance, SUM(CASE WHEN type='CREDIT' AND status='SUCCEEDED' THEN amount WHEN type='DEBIT' AND status='SUCCEEDED' THEN -amount ELSE 0 END) ...` agrupando por conta. |
 | Latência piorou | `http_server_requests_seconds` tem histograma de percentis por rota e status. Compare com `hikaricp_connections_acquire_seconds` (pool) e `jvm_gc_pause_seconds` (GC) para atribuir a causa. |
 
-O componente `sqsListener` do health reporta DOWN se algum container de escuta parar, ou se
-nenhum tiver sido registrado — antes disso, um listener morto deixava o serviço verde e o
-único indício era uma métrica parar de crescer. Ele fica **fora** do grupo `readiness` de
-propósito: autorizar transações não depende da fila, e tirar a instância do balanceador
-porque o consumo parou trocaria degradação parcial por indisponibilidade total. O sinal
-serve para alarme, não para roteamento.
+O indicador `sqsListener` reporta DOWN se algum container de escuta parar, ou se nenhum
+tiver sido registrado — antes disso, um listener morto deixava o serviço verde e o único
+indício era uma métrica parar de crescer. Como `show-details` esconde o detalhe por
+componente de chamador anônimo (e sem Spring Security ninguém é autorizado), ele ganhou um
+grupo próprio: **`/actuator/health/sqs`** responde só pelo consumo da fila, com status
+próprio e sem revelar detalhe de infraestrutura. É esse o endpoint para alarmar.
+
+O indicador fica **fora** do grupo `readiness` de propósito: autorizar transações não
+depende da fila, e tirar a instância do balanceador porque o consumo parou trocaria
+degradação parcial por indisponibilidade total. O sinal serve para alarme, não para
+roteamento.
 
 **Limitação conhecida**: não há métrica de lag da fila (idade da mensagem mais antiga). O
 proxy é a consulta de `registered_at` acima; em produção viria do próprio SQS via
